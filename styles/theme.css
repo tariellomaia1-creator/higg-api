@@ -1,0 +1,47 @@
+/**
+ * Quanta tokens → shadcn variables, so q-* utilities and shadcn components read
+ * one palette. Lives outside globals.css on purpose: `shadcn add` merges
+ * globals.css and keeps the base template's :root values, while this file is
+ * written verbatim. The attribute selector outranks the template's :root/.dark.
+ * Dark only — data-theme is pinned in app/layout.tsx.
+ */
+:root[data-theme="default-dark"] {
+    --hf-type-family-grotesk-base: var(--font-space-grotesk), "Space Grotesk";
+    --hf-type-family-primary-base: var(--font-space-grotesk), "Space Grotesk";
+    --hf-type-family-secondary-base: var(--font-inter), "Inter";
+    --hf-type-family-mono-base: var(--font-ibm-plex-mono), "IBM Plex Mono";
+
+    --background: var(--hf-color-background-primary);
+    --foreground: var(--hf-color-text-primary);
+    --card: var(--hf-color-background-secondary);
+    --card-foreground: var(--hf-color-text-primary);
+    --popover: var(--hf-color-background-tertiary);
+    --popover-foreground: var(--hf-color-text-primary);
+    --primary: var(--hf-color-brand-primary);
+    --primary-foreground: var(--hf-color-button-label-brand);
+    --secondary: var(--hf-color-transparent-light-05);
+    --secondary-foreground: var(--hf-color-text-primary);
+    --muted: var(--hf-color-transparent-light-05);
+    --muted-foreground: var(--hf-color-text-secondary);
+    --accent: var(--hf-color-overlay-hover);
+    --accent-foreground: var(--hf-color-text-primary);
+    --destructive: var(--hf-color-state-error-fg);
+    --border: var(--hf-color-border-default);
+    --input: var(--hf-color-border-strong);
+    --ring: var(--hf-color-border-focus);
+    --chart-1: var(--hf-color-brand-primary);
+    --chart-2: var(--hf-color-brand-blue);
+    --chart-3: var(--hf-color-brand-pink);
+    --chart-4: var(--hf-color-brand-orange);
+    --chart-5: var(--hf-color-brand-cyan);
+    --radius: var(--hf-radius-300);
+    --sidebar: var(--hf-color-background-secondary);
+    --sidebar-foreground: var(--hf-color-text-primary);
+    --sidebar-primary: var(--hf-color-brand-primary);
+    --sidebar-primary-foreground: var(--hf-color-button-label-brand);
+    --sidebar-accent: var(--hf-color-overlay-hover);
+    --sidebar-accent-foreground: var(--hf-color-text-primary);
+    --sidebar-border: var(--hf-color-border-default);
+    --sidebar-ring: var(--hf-color-border-focus);
+    color-scheme: dark;
+}

@@ -1,0 +1,46 @@
+/**
+ * Quanta design tokens (vendored from @higgsfield/quanta, tokens only).
+ *
+ * Layer 1 primitives (--hf-color-grey-900 …), Layer 2 semantic tokens themed by
+ * data-theme (--hf-color-background-primary …), Layer 3 Tailwind v4 bridge that
+ * exposes them as q-* utilities (bg-q-background-primary, text-q-body-md-regular).
+ * Fonts are loaded with next/font in app/layout.tsx and injected as
+ * --hf-type-family-*-base; the upstream fonts.css (woff2 binaries) is not shipped.
+ */
+
+@import "./primitives/index.css";
+@import "./theme/color.css";
+@import "./theme/typography.css";
+
+@import "./tailwind/color.css";
+@import "./tailwind/border-width.css";
+@import "./tailwind/breakpoint.css";
+@import "./tailwind/radius.css";
+@import "./tailwind/spacing.css";
+@import "./tailwind/shadow.css";
+@import "./tailwind/typography.css";
+@import "./tailwind/z-index.css";
+@import "./tailwind/motion.css";
+@import "./tailwind/icon.css";
+@import "./tailwind/opacity.css";
+@import "./tailwind/gradient.css";
+@import "./tailwind/slot.css";
+
+/* Component skins (q-menu-*, q-dropdown-*, q-select-*, q-modal-*, q-tabs-*,
+ * q-field-*, q-close): applied by components/ui/* over the Base UI primitives. */
+@import "./components/menu.css";
+@import "./components/dropdown.css";
+@import "./components/select.css";
+@import "./components/modal.css";
+@import "./components/close-button.css";
+@import "./components/tabs.css";
+@import "./components/input.css";
+
+/* Keyboard focus ring (from quanta button.css): background-colored gap + lime ring. */
+@utility q-focus-ring {
+  &:focus-visible {
+    box-shadow:
+      0 0 0 var(--hf-border-width-thick) var(--hf-color-background-primary),
+      0 0 0 var(--hf-space-100) var(--hf-color-border-focus);
+  }
+}
