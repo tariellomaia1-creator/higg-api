@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 import { cancelGeneration, submitGeneration } from "@/generation/actions"
 import { getModel } from "@/generation/catalog"
@@ -24,6 +24,7 @@ export function useRuns() {
   const [records, setRecords] = useState<RunRecord[]>([])
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const submitting = useRef(false)
 
   const update = useCallback((id: string, patch: Partial<RunRecord>) => {
     setRecords((current) =>
@@ -71,10 +72,14 @@ export function useRuns() {
       plane: GenerationPlane,
       projectId?: string
     ): Promise<RunRecord | null> => {
+      // `running` only lists requests the platform already queued, so a second
+      // click while the first submit is in flight must be dropped here.
+      if (submitting.current) return null
+      submitting.current = true
       setError(null)
       const model = getModel(plane.model)
       try {
-        const queued = await submitGeneration(plane)
+        const queued = await submitGeneration(plane, crypto.randomUUID())
         const record: RunRecord = {
           id: queued.requestId,
           requestId: queued.requestId,
@@ -95,6 +100,8 @@ export function useRuns() {
       } catch (caught) {
         setError(caught instanceof Error ? caught.message : String(caught))
         return null
+      } finally {
+        submitting.current = false
       }
     },
     [watch]

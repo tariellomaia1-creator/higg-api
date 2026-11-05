@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" width="600" height="800">
+  <defs>
+    <radialGradient id="bg" cx="0.5" cy="0.4" r="0.8"><stop offset="0" stop-color="#27272a"/><stop offset="1" stop-color="#09090b"/></radialGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#065f46"/><stop offset="0.35" stop-color="#34d399"/><stop offset="0.55" stop-color="#a7f3d0"/><stop offset="1" stop-color="#064e3b"/></linearGradient>
+    <linearGradient id="cap" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#78716c"/><stop offset="0.5" stop-color="#f5f5f4"/><stop offset="1" stop-color="#57534e"/></linearGradient>
+    <linearGradient id="ped" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3f3f46"/><stop offset="1" stop-color="#18181b"/></linearGradient>
+    <radialGradient id="beam" cx="0.5" cy="0" r="1"><stop offset="0" stop-color="#fff" stop-opacity="0.22"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="600" height="800" fill="url(#bg)"/>
+  <path d="M220 0 H380 L520 640 H80 Z" fill="url(#beam)"/>
+  <ellipse cx="300" cy="640" rx="190" ry="34" fill="url(#ped)"/>
+  <rect x="110" y="640" width="380" height="160" fill="url(#ped)"/>
+  <ellipse cx="300" cy="640" rx="190" ry="34" fill="none" stroke="#a1a1aa" stroke-opacity="0.4"/>
+  <ellipse cx="300" cy="636" rx="90" ry="14" fill="#000" opacity="0.55"/>
+  <rect x="270" y="250" width="60" height="70" rx="8" fill="url(#cap)"/>
+  <path d="M230 330 Q230 316 250 316 H350 Q370 316 370 330 V610 Q370 632 348 632 H252 Q230 632 230 610 Z" fill="url(#glass)"/>
+  <rect x="258" y="440" width="84" height="110" rx="6" fill="#ecfdf5" opacity="0.9"/>
+  <text x="300" y="490" text-anchor="middle" font-family="system-ui,sans-serif" font-size="20" font-weight="800" fill="#064e3b">BH</text>
+  <rect x="276" y="506" width="48" height="4" rx="2" fill="#064e3b" opacity="0.6"/>
+  <rect x="284" y="518" width="32" height="4" rx="2" fill="#064e3b" opacity="0.4"/>
+  <path d="M248 340 V600" stroke="#fff" stroke-opacity="0.45" stroke-width="6" stroke-linecap="round"/>
+  <g fill="#fff">
+    <circle cx="170" cy="300" r="2" opacity="0.6"/><circle cx="420" cy="240" r="1.6" opacity="0.5"/><circle cx="450" cy="380" r="2.4" opacity="0.4"/><circle cx="150" cy="460" r="1.4" opacity="0.5"/><circle cx="390" cy="160" r="1.2" opacity="0.6"/>
+  </g>
+</svg>

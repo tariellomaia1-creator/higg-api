@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" width="600" height="800">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0b1020"/><stop offset="1" stop-color="#1e293b"/></linearGradient>
+    <linearGradient id="e1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7f1d1d"/><stop offset="1" stop-color="#1f0a0a"/></linearGradient>
+    <linearGradient id="e2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0e7490"/><stop offset="1" stop-color="#082f49"/></linearGradient>
+    <linearGradient id="e3" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ca8a04"/><stop offset="1" stop-color="#422006"/></linearGradient>
+    <radialGradient id="spot" cx="0.5" cy="0.35" r="0.7"><stop offset="0" stop-color="#fff" stop-opacity="0.12"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+  </defs>
+  <rect width="600" height="800" fill="url(#bg)"/>
+  <rect width="600" height="800" fill="url(#spot)"/>
+  <g transform="translate(40 190) rotate(-6 80 150)">
+    <rect width="160" height="284" rx="18" fill="url(#e1)" stroke="#fff" stroke-opacity="0.25"/>
+    <path d="M30 220 h100 v14 h-100z M50 150 l30 -40 l30 40z" fill="#fca5a5" opacity="0.5"/>
+    <circle cx="80" cy="90" r="22" fill="#fecaca" opacity="0.6"/>
+    <text x="16" y="34" font-family="system-ui,sans-serif" font-size="18" font-weight="800" fill="#fff">EP 1</text>
+  </g>
+  <g transform="translate(220 150)">
+    <rect width="160" height="284" rx="18" fill="url(#e2)" stroke="#fff" stroke-opacity="0.35"/>
+    <rect x="24" y="120" width="112" height="70" rx="8" fill="#a5f3fc" opacity="0.3"/>
+    <path d="M36 175 l20 -20 l18 12 l26 -30 l20 18" stroke="#a5f3fc" stroke-width="4" fill="none"/>
+    <circle cx="80" cy="80" r="22" fill="#cffafe" opacity="0.6"/>
+    <text x="16" y="34" font-family="system-ui,sans-serif" font-size="18" font-weight="800" fill="#fff">EP 2</text>
+  </g>
+  <g transform="translate(400 190) rotate(6 80 150)">
+    <rect width="160" height="284" rx="18" fill="url(#e3)" stroke="#fff" stroke-opacity="0.25"/>
+    <path d="M40 200 v-40 M70 200 v-70 M100 200 v-100 M130 200 v-130" stroke="#fde68a" stroke-width="14" stroke-linecap="round" opacity="0.7"/>
+    <text x="16" y="34" font-family="system-ui,sans-serif" font-size="18" font-weight="800" fill="#fff">EP 3</text>
+  </g>
+  <g transform="translate(300 560)">
+    <circle r="34" fill="#fff" fill-opacity="0.1" stroke="#fff" stroke-opacity="0.4"/>
+    <path d="M-10 -16 L18 0 L-10 16 Z" fill="#fff"/>
+  </g>
+  <text x="300" y="680" text-anchor="middle" font-family="system-ui,sans-serif" font-size="34" font-weight="700" fill="#f8fafc" letter-spacing="2">B2B SERIES</text>
+  <text x="300" y="716" text-anchor="middle" font-family="system-ui,sans-serif" font-size="18" fill="#94a3b8" letter-spacing="6">PROBLEM · SOLUTION · RESULT</text>
+</svg>

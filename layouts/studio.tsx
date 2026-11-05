@@ -13,6 +13,11 @@ import {
 import { HeroComposition } from "@/components/studio/hero-composition"
 import { KeyDialog } from "@/components/studio/key-dialog"
 import {
+  SeriesDialog,
+  orderModel,
+  type SeriesOrder,
+} from "@/components/studio/series-dialog"
+import {
   MyProjects,
   type MyProjectsProject,
 } from "@/components/studio/my-projects"
@@ -50,6 +55,12 @@ import {
   type AssetSelection,
 } from "@/lib/studio/uploads"
 import { useRuns } from "@/lib/studio/use-runs"
+import {
+  characterModel,
+  characterPlane,
+  episodePlane,
+} from "@/lib/studio/series"
+import { watchRequest } from "@/generation/poll"
 
 /**
  * StudioTemplate — the full creative workspace: projects-first sidebar, hero,
@@ -62,11 +73,11 @@ import { useRuns } from "@/lib/studio/use-runs"
  * Explore / My Projects section, and the UserGenerations feed.
  */
 
-// PLACEHOLDER ASSETS — replaced by the app's real outputs as soon as there are three.
+// Shown until the user has three ready outputs of their own.
 const HERO_FALLBACKS = [
-  "/presets/placeholder-2.svg",
-  "/presets/placeholder-1.svg",
-  "/presets/placeholder-3.svg",
+  "/presets/mountains.svg",
+  "/presets/lesson.svg",
+  "/presets/city.svg",
 ] as const
 
 const HERO_GLOW =
@@ -139,7 +150,10 @@ function HomeState({
           className="flex w-full min-w-0 flex-col items-center gap-8"
         >
           <div className="flex flex-col items-center gap-5">
-            <HeroComposition images={images} alt="Recent Studio outputs" />
+            <HeroComposition
+              images={images}
+              alt="Recent BeHero AI Video outputs"
+            />
             <h1 className="max-w-[640px] text-center text-q-accent-lg-bold uppercase">
               {title}
             </h1>
@@ -265,8 +279,8 @@ export interface StudioTemplateProps {
 }
 
 export function StudioTemplate({
-  title = "Studio",
-  headline = "Turn any idea into images and video",
+  title = "BeHero AI Video",
+  headline = "Turn any idea into video and images",
 }: StudioTemplateProps) {
   const [view, setView] = useState<StudioView>({ kind: "home" })
   const [collapsed, setCollapsed] = useState(false)
@@ -285,6 +299,7 @@ export function StudioTemplate({
   const projectsStore = useProjects()
   const uploads = useUploads((s) => s.items)
   const runs = useRuns()
+  const [seriesOpen, setSeriesOpen] = useState(false)
 
   const surfaces = useMemo(
     () =>
@@ -413,7 +428,62 @@ export function StudioTemplate({
     )
   }, [canceling, generating, runs])
 
+  /** Opens the series project at once, then chains: character frame (when
+      generated) → three episodes, each a normal run in that project. */
+  const launchSeries = useCallback(
+    async (order: SeriesOrder) => {
+      const model = orderModel(order)
+      const project = projectsStore.create(
+        `Series · ${order.brief.brand.trim()}`
+      )
+      setView({ kind: "project", projectId: project.id })
+      void (async () => {
+        let characterUrl = order.characterUrl
+        if (order.config.character === "generate") {
+          const imageModel = characterModel()
+          if (imageModel) {
+            const record = await runs.submit(
+              characterPlane(imageModel, order.brief, order.config),
+              project.id
+            )
+            if (!record) return
+            const status = await watchRequest(record.requestId)
+            characterUrl = status.images?.[0]?.url
+            if (status.status !== "completed" || !characterUrl) {
+              runs.setError(
+                `Character frame ${status.status}; the episodes were not started.`
+              )
+              return
+            }
+          }
+        }
+        for (const [i, episode] of order.episodes.entries()) {
+          const record = await runs.submit(
+            episodePlane(
+              model,
+              episode,
+              i,
+              order.brief,
+              order.config,
+              characterUrl
+            ),
+            project.id
+          )
+          if (!record) return
+        }
+        projectsStore.touch(project.id)
+      })().catch((caught: unknown) =>
+        runs.setError(caught instanceof Error ? caught.message : String(caught))
+      )
+    },
+    [projectsStore, runs]
+  )
+
   const handleUseTemplate = (t: TemplateItem) => {
+    if (t.opens === "series") {
+      setSeriesOpen(true)
+      return
+    }
     setPrompt(t.prompt)
     if (t.modelId && MODELS.some((m) => m.id === t.modelId)) {
       const target = getModel(t.modelId)
@@ -549,6 +619,13 @@ export function StudioTemplate({
         onOpenChange={setKeyOpen}
         configured={keyConfigured}
         onChange={setKeyConfigured}
+      />
+      <SeriesDialog
+        open={seriesOpen}
+        onOpenChange={setSeriesOpen}
+        keyConfigured={keyConfigured}
+        onNeedKey={() => setKeyOpen(true)}
+        onLaunch={launchSeries}
       />
     </div>
   )

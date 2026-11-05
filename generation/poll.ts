@@ -4,7 +4,12 @@ import type { GenerationStatus, StatusResult } from "./platform"
 /** Statuses the platform never moves off again. */
 const TERMINAL = new Set(["completed", "failed", "nsfw", "canceled"])
 
-export const POLL_INTERVAL_MS = 4000
+/** Documented cadence: start at 2s, grow ×1.5 to a 10s ceiling, plus jitter.
+    A new watch resets it so a fresh run is checked promptly. */
+const POLL_START_MS = 2000
+const POLL_MAX_MS = 10_000
+const POLL_JITTER_MS = 500
+let interval = POLL_START_MS
 export const POLL_DEADLINE_MS = 10 * 60_000
 /** Rounds allowed to fail back to back before the watches are given up on. One
     dropped round must not end every generation in flight. */
@@ -33,6 +38,7 @@ export function watchRequest(
 ): Promise<GenerationStatus> {
   const existing = inflight.get(requestId)
   if (existing) return existing
+  interval = POLL_START_MS
   const promise = new Promise<GenerationStatus>((resolve, reject) => {
     waiting.set(requestId, {
       deadline: opts?.deadline ?? Date.now() + POLL_DEADLINE_MS,
@@ -64,7 +70,9 @@ export function stopWatching(): void {
 
 function schedule(): void {
   if (timer !== null || polling || waiting.size === 0) return
-  timer = setTimeout(() => void round(), POLL_INTERVAL_MS)
+  const delay = interval + Math.random() * POLL_JITTER_MS
+  interval = Math.min(interval * 1.5, POLL_MAX_MS)
+  timer = setTimeout(() => void round(), delay)
 }
 
 async function round(): Promise<void> {
@@ -90,6 +98,9 @@ function deliver(result: StatusResult): void {
   const waiter = waiting.get(result.requestId)
   if (!waiter) return
   if ("error" in result) {
+    // A 5xx or dropped connection leaves the run in flight; the deadline
+    // sweep still ends it if the platform never answers.
+    if (result.transient) return
     waiting.delete(result.requestId)
     waiter.reject(new Error(result.error))
     return

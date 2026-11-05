@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" width="600" height="800">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0f172a"/><stop offset="1" stop-color="#3b0764"/></linearGradient>
+    <radialGradient id="key" cx="0.85" cy="0.3" r="0.7"><stop offset="0" stop-color="#f472b6" stop-opacity="0.6"/><stop offset="1" stop-color="#f472b6" stop-opacity="0"/></radialGradient>
+    <radialGradient id="fill" cx="0.1" cy="0.6" r="0.6"><stop offset="0" stop-color="#38bdf8" stop-opacity="0.4"/><stop offset="1" stop-color="#38bdf8" stop-opacity="0"/></radialGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="1" y2="0"><stop offset="0.7" stop-color="#1e1b2e"/><stop offset="1" stop-color="#fb7185"/></linearGradient>
+  </defs>
+  <rect width="600" height="800" fill="url(#bg)"/>
+  <rect width="600" height="800" fill="url(#key)"/>
+  <rect width="600" height="800" fill="url(#fill)"/>
+  <path d="M120 800 C130 640 200 580 300 570 C400 580 470 640 480 800 Z" fill="url(#rim)"/>
+  <rect x="268" y="480" width="64" height="100" rx="20" fill="url(#rim)"/>
+  <path d="M300 220 C380 220 410 290 405 360 C400 440 360 500 300 505 C240 500 200 440 195 360 C190 290 220 220 300 220 Z" fill="url(#rim)"/>
+  <path d="M195 350 C180 250 240 190 310 195 C390 200 430 260 410 360 C400 300 370 270 330 262 C280 255 230 280 195 350 Z" fill="#0b0814"/>
+  <path d="M405 300 C415 360 410 430 380 470" stroke="#fda4af" stroke-width="3" fill="none" opacity="0.8" stroke-linecap="round"/>
+  <path d="M470 700 C476 740 478 770 480 800" stroke="#fda4af" stroke-width="3" fill="none" opacity="0.6"/>
+  <g fill="#fff" opacity="0.5"><circle cx="90" cy="140" r="2"/><circle cx="510" cy="560" r="1.6"/><circle cx="140" cy="420" r="1.4"/><circle cx="520" cy="120" r="1.2"/></g>
+</svg>

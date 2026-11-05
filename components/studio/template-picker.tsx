@@ -3,10 +3,11 @@
 
 import type { KeyboardEvent, ReactNode } from "react"
 import {
-  BatteryFull,
-  Calendar,
-  House,
-  WandSparkles,
+  Building2,
+  Clapperboard,
+  GraduationCap,
+  Mountain,
+  Package,
   type LucideIcon,
 } from "lucide-react"
 
@@ -20,14 +21,15 @@ import { cn } from "@/lib/utils"
  * `ExamplePresets`.
  */
 
-// PLACEHOLDER ASSETS — demo art in /presets/*.svg. An adapted app replaces
-// every template with bespoke, app-specific examples and real preview media.
-const THUMBS = [
-  "/presets/placeholder-1.svg",
-  "/presets/placeholder-2.svg",
-  "/presets/placeholder-3.svg",
-  "/presets/placeholder-4.svg",
-] as const
+// BeHero preset art, 3:4 portrait.
+const ART = {
+  lesson: "/presets/lesson.svg",
+  mountains: "/presets/mountains.svg",
+  city: "/presets/city.svg",
+  product: "/presets/product.svg",
+  portrait: "/presets/portrait.svg",
+  series: "/presets/series.svg",
+} as const
 
 export interface TemplateItem {
   id: string
@@ -43,53 +45,65 @@ export interface TemplateItem {
   /** Catalog model id to switch to, when the template needs a specific one. */
   modelId?: string
   settings?: Record<string, unknown>
+  /** Opens a guided flow instead of seeding the dock. */
+  opens?: "series"
 }
 
-// PLACEHOLDER content — replace when adapting.
 export const TEMPLATES: TemplateItem[] = [
+  {
+    id: "b2b-series",
+    title: "B2B mini-series",
+    subtitle: "3 vertical episodes about your brand",
+    category: "commercial",
+    kind: "video",
+    images: [ART.series, ART.lesson, ART.product],
+    icon: Clapperboard,
+    prompt: "",
+    opens: "series",
+  },
+  {
+    id: "lesson-intro",
+    title: "Lesson intro",
+    subtitle: "Opening shot for a video lesson",
+    category: "education",
+    kind: "video",
+    images: [ART.lesson, ART.portrait, ART.city],
+    icon: GraduationCap,
+    prompt:
+      "Slow push-in on a chalkboard in a warm classroom at dusk, chalk formulas glowing softly, books and an apple on the desk, dust drifting through a single lamp beam, cinematic and calm.",
+  },
+  {
+    id: "caucasus-drone",
+    title: "Caucasus drone shot",
+    subtitle: "Sunset flight over the peaks",
+    category: "travel",
+    kind: "video",
+    images: [ART.mountains, ART.city, ART.lesson],
+    icon: Mountain,
+    prompt:
+      "Aerial drone shot gliding over snow-capped Caucasus mountains at sunset, an old stone watchtower on the ridge, golden haze in the valleys, smooth forward motion.",
+  },
+  {
+    id: "tbilisi-night",
+    title: "Tbilisi at night",
+    subtitle: "Old town lights on the river",
+    category: "travel",
+    kind: "image",
+    images: [ART.city, ART.mountains, ART.portrait],
+    icon: Building2,
+    prompt:
+      "Night view of Tbilisi old town from across the Mtkvari river, a glowing modern footbridge, church domes and warm window lights reflected in the water, moon over the hills.",
+  },
   {
     id: "product-hero",
     title: "Product hero shot",
-    subtitle: "Studio lighting, larger than life",
+    subtitle: "Studio light, slow orbit",
     category: "commercial",
     kind: "video",
-    images: [THUMBS[0], THUMBS[1], THUMBS[2]],
-    icon: BatteryFull,
+    images: [ART.product, ART.portrait, ART.lesson],
+    icon: Package,
     prompt:
-      "Cinematic product hero shot on a dark studio backdrop, slow orbit, soft rim light, dust particles catching the light.",
-  },
-  {
-    id: "ugc-review",
-    title: "UGC review",
-    subtitle: "Handheld, creator-style",
-    category: "ugc",
-    kind: "video",
-    images: [THUMBS[1], THUMBS[3], THUMBS[0]],
-    icon: WandSparkles,
-    prompt:
-      "Handheld creator-style review filmed on a phone in a sunny kitchen, natural light, casual framing, subtle camera shake.",
-  },
-  {
-    id: "editorial-still",
-    title: "Editorial still",
-    subtitle: "Magazine-grade key visual",
-    category: "commercial",
-    kind: "image",
-    images: [THUMBS[2], THUMBS[0], THUMBS[1]],
-    icon: Calendar,
-    prompt:
-      "Editorial fashion still, 85mm, shallow depth of field, muted palette, single hard light from the left.",
-  },
-  {
-    id: "lifestyle-home",
-    title: "Lifestyle at home",
-    subtitle: "Warm three-shot story",
-    category: "ugc",
-    kind: "image",
-    images: [THUMBS[3], THUMBS[2], THUMBS[0]],
-    icon: House,
-    prompt:
-      "Warm lifestyle photo of a couple at home in the evening, lamp light, film grain, candid moment.",
+      "Cinematic product hero shot of a green glass bottle on a dark pedestal, slow orbit, soft top light and rim light, dust particles catching the beam.",
   },
 ]
 

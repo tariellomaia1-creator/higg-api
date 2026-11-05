@@ -1,0 +1,810 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry.json",
+  "items": [
+    {
+      "name": "models",
+      "type": "registry:item",
+      "title": "All models",
+      "description": "Every model in the Higgsfield catalog. Install alongside a template item.",
+      "categories": [
+        "model"
+      ],
+      "files": [
+        {
+          "path": "dop.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/dop.ts"
+        },
+        {
+          "path": "flux-2.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/flux-2.ts"
+        },
+        {
+          "path": "flux-3.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/flux-3.ts"
+        },
+        {
+          "path": "grok-imagine-2.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/grok-imagine-2.ts"
+        },
+        {
+          "path": "grok-imagine-video-1.5.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/grok-imagine-video-1.5.ts"
+        },
+        {
+          "path": "happy-horse-1.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/happy-horse-1.ts"
+        },
+        {
+          "path": "happy-horse-1.1.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/happy-horse-1.1.ts"
+        },
+        {
+          "path": "ideogram-4.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/ideogram-4.ts"
+        },
+        {
+          "path": "kling-2.5.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/kling-2.5.ts"
+        },
+        {
+          "path": "kling-2.6.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/kling-2.6.ts"
+        },
+        {
+          "path": "kling-3.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/kling-3.ts"
+        },
+        {
+          "path": "kling-o1.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/kling-o1.ts"
+        },
+        {
+          "path": "kling-o3.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/kling-o3.ts"
+        },
+        {
+          "path": "ltx-2.5-fast.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/ltx-2.5-fast.ts"
+        },
+        {
+          "path": "ltx-2.5-pro.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/ltx-2.5-pro.ts"
+        },
+        {
+          "path": "minimax-h3.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/minimax-h3.ts"
+        },
+        {
+          "path": "minimax-hailuo-2.3.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/minimax-hailuo-2.3.ts"
+        },
+        {
+          "path": "pixverse-6.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/pixverse-6.ts"
+        },
+        {
+          "path": "qwen-image-3.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/qwen-image-3.ts"
+        },
+        {
+          "path": "recraft-4.1.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/recraft-4.1.ts"
+        },
+        {
+          "path": "seedance-2.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/seedance-2.ts"
+        },
+        {
+          "path": "seedance-2.5.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/seedance-2.5.ts"
+        },
+        {
+          "path": "soul.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/soul.ts"
+        },
+        {
+          "path": "wan-2.6.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/wan-2.6.ts"
+        },
+        {
+          "path": "wan-2.7.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/wan-2.7.ts"
+        },
+        {
+          "path": "wan-3.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/wan-3.ts"
+        },
+        {
+          "path": "wan-3-prime.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/wan-3-prime.ts"
+        },
+        {
+          "path": "z-image-turbo.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/z-image-turbo.ts"
+        }
+      ]
+    },
+    {
+      "name": "dop",
+      "type": "registry:item",
+      "title": "DoP",
+      "description": "DoP video model for Higgsfield app templates. Requires a template item (studio).",
+      "categories": [
+        "model",
+        "video"
+      ],
+      "meta": {
+        "ids": [
+          "dop"
+        ],
+        "surface": "video"
+      },
+      "files": [
+        {
+          "path": "dop.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/dop.ts"
+        }
+      ]
+    },
+    {
+      "name": "flux-2",
+      "type": "registry:item",
+      "title": "Flux 2",
+      "description": "Flux 2 image model for Higgsfield app templates. Requires a template item (studio).",
+      "categories": [
+        "model",
+        "image"
+      ],
+      "meta": {
+        "ids": [
+          "flux-2"
+        ],
+        "surface": "image"
+      },
+      "files": [
+        {
+          "path": "flux-2.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/flux-2.ts"
+        }
+      ]
+    },
+    {
+      "name": "flux-3",
+      "type": "registry:item",
+      "title": "Flux 3",
+      "description": "Flux 3 video model for Higgsfield app templates. Requires a template item (studio).",
+      "categories": [
+        "model",
+        "video"
+      ],
+      "meta": {
+        "ids": [
+          "flux-3"
+        ],
+        "surface": "video"
+      },
+      "files": [
+        {
+          "path": "flux-3.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/flux-3.ts"
+        }
+      ]
+    },
+    {
+      "name": "grok-imagine-2",
+      "type": "registry:item",
+      "title": "Grok Imagine 2.0",
+      "description": "Grok Imagine 2.0 image model for Higgsfield app templates. Requires a template item (studio).",
+      "categories": [
+        "model",
+        "image"
+      ],
+      "meta": {
+        "ids": [
+          "grok-imagine-2"
+        ],
+        "surface": "image"
+      },
+      "files": [
+        {
+          "path": "grok-imagine-2.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/grok-imagine-2.ts"
+        }
+      ]
+    },
+    {
+      "name": "grok-imagine-video-1.5",
+      "type": "registry:item",
+      "title": "Grok Imagine Video 1.5",
+      "description": "Grok Imagine Video 1.5 video model for Higgsfield app templates. Requires a template item (studio).",
+      "categories": [
+        "model",
+        "video"
+      ],
+      "meta": {
+        "ids": [
+          "grok-imagine-video-1.5"
+        ],
+        "surface": "video"
+      },
+      "files": [
+        {
+          "path": "grok-imagine-video-1.5.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/grok-imagine-video-1.5.ts"
+        }
+      ]
+    },
+    {
+      "name": "happy-horse-1",
+      "type": "registry:item",
+      "title": "Happy Horse 1.0",
+      "description": "Happy Horse 1.0 video model for Higgsfield app templates. Requires a template item (studio).",
+      "categories": [
+        "model",
+        "video"
+      ],
+      "meta": {
+        "ids": [
+          "happy-horse-1"
+        ],
+        "surface": "video"
+      },
+      "files": [
+        {
+          "path": "happy-horse-1.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/happy-horse-1.ts"
+        }
+      ]
+    },
+    {
+      "name": "happy-horse-1.1",
+      "type": "registry:item",
+      "title": "Happy Horse 1.1",
+      "description": "Happy Horse 1.1 video model for Higgsfield app templates. Requires a template item (studio).",
+      "categories": [
+        "model",
+        "video"
+      ],
+      "meta": {
+        "ids": [
+          "happy-horse-1.1"
+        ],
+        "surface": "video"
+      },
+      "files": [
+        {
+          "path": "happy-horse-1.1.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/happy-horse-1.1.ts"
+        }
+      ]
+    },
+    {
+      "name": "ideogram-4",
+      "type": "registry:item",
+      "title": "Ideogram 4.0",
+      "description": "Ideogram 4.0 image model for Higgsfield app templates. Requires a template item (studio).",
+      "categories": [
+        "model",
+        "image"
+      ],
+      "meta": {
+        "ids": [
+          "ideogram-4"
+        ],
+        "surface": "image"
+      },
+      "files": [
+        {
+          "path": "ideogram-4.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/ideogram-4.ts"
+        }
+      ]
+    },
+    {
+      "name": "kling-2.5",
+      "type": "registry:item",
+      "title": "Kling 2.5",
+      "description": "Kling 2.5 video model for Higgsfield app templates. Requires a template item (studio).",
+      "categories": [
+        "model",
+        "video"
+      ],
+      "meta": {
+        "ids": [
+          "kling-2.5"
+        ],
+        "surface": "video"
+      },
+      "files": [
+        {
+          "path": "kling-2.5.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/kling-2.5.ts"
+        }
+      ]
+    },
+    {
+      "name": "kling-2.6",
+      "type": "registry:item",
+      "title": "Kling 2.6",
+      "description": "Kling 2.6 video model for Higgsfield app templates. Requires a template item (studio).",
+      "categories": [
+        "model",
+        "video"
+      ],
+      "meta": {
+        "ids": [
+          "kling-2.6"
+        ],
+        "surface": "video"
+      },
+      "files": [
+        {
+          "path": "kling-2.6.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/kling-2.6.ts"
+        }
+      ]
+    },
+    {
+      "name": "kling-3",
+      "type": "registry:item",
+      "title": "Kling 3.0 Turbo",
+      "description": "Kling 3.0 Turbo, Kling 3.0 Standard, Kling 3.0 Pro, Kling 3.0 4K, Kling 3.0 Motion Control, Kling 3.0 Motion Control Pro video model for Higgsfield app templates. Requires a template item (studio).",
+      "categories": [
+        "model",
+        "video"
+      ],
+      "meta": {
+        "ids": [
+          "kling-3-turbo",
+          "kling-3-std",
+          "kling-3-pro",
+          "kling-3-4k",
+          "kling-3-motion-std",
+          "kling-3-motion-pro"
+        ],
+        "surface": "video"
+      },
+      "files": [
+        {
+          "path": "kling-3.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/kling-3.ts"
+        }
+      ]
+    },
+    {
+      "name": "kling-o1",
+      "type": "registry:item",
+      "title": "Kling O1 (Omni)",
+      "description": "Kling O1 (Omni) video model for Higgsfield app templates. Requires a template item (studio).",
+      "categories": [
+        "model",
+        "video"
+      ],
+      "meta": {
+        "ids": [
+          "kling-o1"
+        ],
+        "surface": "video"
+      },
+      "files": [
+        {
+          "path": "kling-o1.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/kling-o1.ts"
+        }
+      ]
+    },
+    {
+      "name": "kling-o3",
+      "type": "registry:item",
+      "title": "Kling O3",
+      "description": "Kling O3 video model for Higgsfield app templates. Requires a template item (studio).",
+      "categories": [
+        "model",
+        "video"
+      ],
+      "meta": {
+        "ids": [
+          "kling-o3"
+        ],
+        "surface": "video"
+      },
+      "files": [
+        {
+          "path": "kling-o3.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/kling-o3.ts"
+        }
+      ]
+    },
+    {
+      "name": "ltx-2.5-fast",
+      "type": "registry:item",
+      "title": "LTX 2.5 Fast",
+      "description": "LTX 2.5 Fast video model for Higgsfield app templates. Requires a template item (studio).",
+      "categories": [
+        "model",
+        "video"
+      ],
+      "meta": {
+        "ids": [
+          "ltx-2.5-fast"
+        ],
+        "surface": "video"
+      },
+      "files": [
+        {
+          "path": "ltx-2.5-fast.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/ltx-2.5-fast.ts"
+        }
+      ]
+    },
+    {
+      "name": "ltx-2.5-pro",
+      "type": "registry:item",
+      "title": "LTX 2.5 Pro",
+      "description": "LTX 2.5 Pro video model for Higgsfield app templates. Requires a template item (studio).",
+      "categories": [
+        "model",
+        "video"
+      ],
+      "meta": {
+        "ids": [
+          "ltx-2.5-pro"
+        ],
+        "surface": "video"
+      },
+      "files": [
+        {
+          "path": "ltx-2.5-pro.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/ltx-2.5-pro.ts"
+        }
+      ]
+    },
+    {
+      "name": "minimax-h3",
+      "type": "registry:item",
+      "title": "MiniMax H3",
+      "description": "MiniMax H3 video model for Higgsfield app templates. Requires a template item (studio).",
+      "categories": [
+        "model",
+        "video"
+      ],
+      "meta": {
+        "ids": [
+          "minimax-h3"
+        ],
+        "surface": "video"
+      },
+      "files": [
+        {
+          "path": "minimax-h3.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/minimax-h3.ts"
+        }
+      ]
+    },
+    {
+      "name": "minimax-hailuo-2.3",
+      "type": "registry:item",
+      "title": "MiniMax Hailuo 2.3",
+      "description": "MiniMax Hailuo 2.3 video model for Higgsfield app templates. Requires a template item (studio).",
+      "categories": [
+        "model",
+        "video"
+      ],
+      "meta": {
+        "ids": [
+          "minimax-hailuo-2.3"
+        ],
+        "surface": "video"
+      },
+      "files": [
+        {
+          "path": "minimax-hailuo-2.3.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/minimax-hailuo-2.3.ts"
+        }
+      ]
+    },
+    {
+      "name": "pixverse-6",
+      "type": "registry:item",
+      "title": "PixVerse 6",
+      "description": "PixVerse 6 video model for Higgsfield app templates. Requires a template item (studio).",
+      "categories": [
+        "model",
+        "video"
+      ],
+      "meta": {
+        "ids": [
+          "pixverse-6"
+        ],
+        "surface": "video"
+      },
+      "files": [
+        {
+          "path": "pixverse-6.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/pixverse-6.ts"
+        }
+      ]
+    },
+    {
+      "name": "qwen-image-3",
+      "type": "registry:item",
+      "title": "Qwen Image 3",
+      "description": "Qwen Image 3 image model for Higgsfield app templates. Requires a template item (studio).",
+      "categories": [
+        "model",
+        "image"
+      ],
+      "meta": {
+        "ids": [
+          "qwen-image-3"
+        ],
+        "surface": "image"
+      },
+      "files": [
+        {
+          "path": "qwen-image-3.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/qwen-image-3.ts"
+        }
+      ]
+    },
+    {
+      "name": "recraft-4.1",
+      "type": "registry:item",
+      "title": "Recraft 4.1",
+      "description": "Recraft 4.1 image model for Higgsfield app templates. Requires a template item (studio).",
+      "categories": [
+        "model",
+        "image"
+      ],
+      "meta": {
+        "ids": [
+          "recraft-4.1"
+        ],
+        "surface": "image"
+      },
+      "files": [
+        {
+          "path": "recraft-4.1.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/recraft-4.1.ts"
+        }
+      ]
+    },
+    {
+      "name": "seedance-2",
+      "type": "registry:item",
+      "title": "Seedance 2.0",
+      "description": "Seedance 2.0, Seedance 2.0 Fast, Seedance 2.0 Mini video model for Higgsfield app templates. Requires a template item (studio).",
+      "categories": [
+        "model",
+        "video"
+      ],
+      "meta": {
+        "ids": [
+          "seedance-2",
+          "seedance-2-fast",
+          "seedance-2-mini"
+        ],
+        "surface": "video"
+      },
+      "files": [
+        {
+          "path": "seedance-2.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/seedance-2.ts"
+        }
+      ]
+    },
+    {
+      "name": "seedance-2.5",
+      "type": "registry:item",
+      "title": "Seedance 2.5",
+      "description": "Seedance 2.5, Seedance 2.5 Edit, Seedance 2.5 Extend video model for Higgsfield app templates. Requires a template item (studio).",
+      "categories": [
+        "model",
+        "video"
+      ],
+      "meta": {
+        "ids": [
+          "seedance-2.5",
+          "seedance-2.5-edit",
+          "seedance-2.5-extend"
+        ],
+        "surface": "video"
+      },
+      "files": [
+        {
+          "path": "seedance-2.5.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/seedance-2.5.ts"
+        }
+      ]
+    },
+    {
+      "name": "soul",
+      "type": "registry:item",
+      "title": "Soul 2",
+      "description": "Soul 2, Soul Cinema image model for Higgsfield app templates. Requires a template item (studio).",
+      "categories": [
+        "model",
+        "image"
+      ],
+      "meta": {
+        "ids": [
+          "soul-2",
+          "soul-cinema"
+        ],
+        "surface": "image"
+      },
+      "files": [
+        {
+          "path": "soul.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/soul.ts"
+        }
+      ]
+    },
+    {
+      "name": "wan-2.6",
+      "type": "registry:item",
+      "title": "Wan 2.6",
+      "description": "Wan 2.6 video model for Higgsfield app templates. Requires a template item (studio).",
+      "categories": [
+        "model",
+        "video"
+      ],
+      "meta": {
+        "ids": [
+          "wan-2.6"
+        ],
+        "surface": "video"
+      },
+      "files": [
+        {
+          "path": "wan-2.6.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/wan-2.6.ts"
+        }
+      ]
+    },
+    {
+      "name": "wan-2.7",
+      "type": "registry:item",
+      "title": "Wan 2.7",
+      "description": "Wan 2.7 video model for Higgsfield app templates. Requires a template item (studio).",
+      "categories": [
+        "model",
+        "video"
+      ],
+      "meta": {
+        "ids": [
+          "wan-2.7"
+        ],
+        "surface": "video"
+      },
+      "files": [
+        {
+          "path": "wan-2.7.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/wan-2.7.ts"
+        }
+      ]
+    },
+    {
+      "name": "wan-3",
+      "type": "registry:item",
+      "title": "Wan 3.0",
+      "description": "Wan 3.0 video model for Higgsfield app templates. Requires a template item (studio).",
+      "categories": [
+        "model",
+        "video"
+      ],
+      "meta": {
+        "ids": [
+          "wan-3"
+        ],
+        "surface": "video"
+      },
+      "files": [
+        {
+          "path": "wan-3.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/wan-3.ts"
+        }
+      ]
+    },
+    {
+      "name": "wan-3-prime",
+      "type": "registry:item",
+      "title": "Wan 3.0 Prime",
+      "description": "Wan 3.0 Prime video model for Higgsfield app templates. Requires a template item (studio).",
+      "categories": [
+        "model",
+        "video"
+      ],
+      "meta": {
+        "ids": [
+          "wan-3-prime"
+        ],
+        "surface": "video"
+      },
+      "files": [
+        {
+          "path": "wan-3-prime.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/wan-3-prime.ts"
+        }
+      ]
+    },
+    {
+      "name": "z-image-turbo",
+      "type": "registry:item",
+      "title": "Z-Image Turbo",
+      "description": "Z-Image Turbo image model for Higgsfield app templates. Requires a template item (studio).",
+      "categories": [
+        "model",
+        "image"
+      ],
+      "meta": {
+        "ids": [
+          "z-image-turbo"
+        ],
+        "surface": "image"
+      },
+      "files": [
+        {
+          "path": "z-image-turbo.ts",
+          "type": "registry:file",
+          "target": "~/generation/catalog/models/z-image-turbo.ts"
+        }
+      ]
+    }
+  ]
+}

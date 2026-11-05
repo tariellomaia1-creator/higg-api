@@ -9,10 +9,12 @@
     "start": "next start",
     "lint": "eslint",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "seedance:example": "node --env-file=.env.local index.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
+    "@higgsfield/client": "^0.2.6",
     "@tanstack/react-virtual": "^3.14.13",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",

@@ -23,10 +23,10 @@ const plexMono = IBM_Plex_Mono({
   display: "swap",
 })
 
-// Replace with the product's own identity when adapting the scaffold.
 export const metadata: Metadata = {
-  title: "Studio",
-  description: "Generate images and video with Higgsfield models.",
+  title: "BeHero AI Video",
+  description:
+    "Create AI video and images on behero.ge with Seedance, Kling, Wan, Soul, Flux and more, using your own Higgsfield API key.",
 }
 
 export const viewport: Viewport = { themeColor: "#131416" }

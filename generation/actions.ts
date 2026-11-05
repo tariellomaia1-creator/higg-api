@@ -12,8 +12,8 @@ import {
   encodeCredentials,
   parseCredentialInput,
 } from "./credentials"
-import { createPlatformClient } from "./platform"
-import type { StatusResult } from "./platform"
+import { PlatformError, createPlatformClient } from "./platform"
+import type { CostEstimate, StatusResult } from "./platform"
 import { toPlatform } from "./to-platform"
 
 export async function savePlatformCredentials(data: unknown) {
@@ -38,14 +38,46 @@ export async function hasPlatformCredentials() {
   return (await readStoredCredentials()) !== null
 }
 
-export async function submitGeneration(plane: GenerationPlane) {
+export async function submitGeneration(
+  plane: GenerationPlane,
+  idempotencyKey: unknown
+) {
+  if (
+    typeof idempotencyKey !== "string" ||
+    !/^[A-Za-z0-9-]{16,64}$/.test(idempotencyKey)
+  )
+    throw new Error("Invalid idempotency key")
   const model = getModel(plane.model)
   const parsed: GenerationPlane = {
     ...plane,
     settings: parseSettings(model, plane.settings),
   }
   const { path, body } = toPlatform(parsed)
-  return createPlatformClient(await readCredentials()).submit(path, body)
+  return createPlatformClient(await readCredentials()).submit(
+    path,
+    body,
+    idempotencyKey
+  )
+}
+
+/** What `submitGeneration` would cost for the same plane; queues nothing.
+    Failures come back as data: production builds mask thrown action errors,
+    and the calculator must show the reason on its own line. */
+export async function estimateGeneration(
+  plane: GenerationPlane
+): Promise<{ estimate: CostEstimate } | { error: string }> {
+  try {
+    const model = getModel(plane.model)
+    const parsed: GenerationPlane = {
+      ...plane,
+      settings: parseSettings(model, plane.settings),
+    }
+    const { path, body } = toPlatform(parsed)
+    const client = createPlatformClient(await readCredentials())
+    return { estimate: await client.estimate(path, body) }
+  } catch (caught) {
+    return { error: caught instanceof Error ? caught.message : String(caught) }
+  }
 }
 
 /** Every request in flight, answered in one round trip. Next dispatches server
@@ -62,9 +94,11 @@ export async function getGenerationStatuses(
       try {
         return { requestId, status: await client.status(requestId) }
       } catch (caught) {
+        // Network failures and 5xx are worth asking again; 401/404 are not.
         return {
           requestId,
           error: caught instanceof Error ? caught.message : String(caught),
+          transient: !(caught instanceof PlatformError) || caught.status >= 500,
         }
       }
     })
