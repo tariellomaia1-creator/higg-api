@@ -1,9 +1,9 @@
-import { MODELS } from "@/generation/catalog"
-import { StudioTemplate } from "@/layouts/studio"
+import type { Metadata } from "next"
 
-import { NoModels } from "@/components/studio/no-models"
+import { DailyPlanner } from "@/components/daily/daily-planner"
+
+export const metadata: Metadata = { title: "BeHero Daily" }
 
 export default function Page() {
-  if (MODELS.length === 0) return <NoModels />
-  return <StudioTemplate />
+  return <DailyPlanner />
 }

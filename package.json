@@ -15,7 +15,9 @@
   "dependencies": {
     "@base-ui/react": "^1.8.0",
     "@higgsfield/client": "^0.2.6",
+    "@neondatabase/serverless": "^1.2.0",
     "@tanstack/react-virtual": "^3.14.13",
+    "@vercel/blob": "^2.8.2",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",
     "lucide-react": "^1.53.0",
@@ -24,6 +26,8 @@
     "radix-ui": "^1.7.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
+    "server-only": "^0.0.1",
+    "sharp": "^0.35.5",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
