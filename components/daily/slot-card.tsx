@@ -44,10 +44,12 @@ type Props = {
   kind: ItemKind
   slot: number
   item: DailyItem | undefined
+  /** Meta is connected: show the posting hour and publish status. */
+  autoPublish: boolean
   onChanged: () => void
 }
 
-export function SlotCard({ day, kind, slot, item, onChanged }: Props) {
+export function SlotCard({ day, kind, slot, item, autoPublish, onChanged }: Props) {
   const fieldId = useId()
   const fileInput = useRef<HTMLInputElement>(null)
   const [prompt, setPrompt] = useState(item?.prompt ?? "")
@@ -147,9 +149,11 @@ export function SlotCard({ day, kind, slot, item, onChanged }: Props) {
       <header className="flex items-start justify-between gap-2">
         <div>
           <h3 className="font-heading text-base font-semibold">{title}</h3>
-          <p className="text-xs text-muted-foreground">გამოქვეყნება {hour}-ზე</p>
+          {autoPublish ? (
+            <p className="text-xs text-muted-foreground">გამოქვეყნება {hour}-ზე</p>
+          ) : null}
         </div>
-        {item ? <StatusBadge item={item} /> : null}
+        {item ? <StatusBadge item={item} autoPublish={autoPublish} /> : null}
       </header>
 
       {item?.status === "ready" && item.resultUrl ? (
@@ -233,7 +237,7 @@ export function SlotCard({ day, kind, slot, item, onChanged }: Props) {
       </div>
       <div className="flex flex-col gap-1">
         <label htmlFor={`${fieldId}-caption`} className="text-xs font-medium">
-          Caption (Facebook / Instagram)
+          {autoPublish ? "Caption (Facebook / Instagram)" : "Caption (შენთვის, ხელით დასაპოსტად)"}
         </label>
         <textarea
           id={`${fieldId}-caption`}
@@ -279,7 +283,7 @@ export function SlotCard({ day, kind, slot, item, onChanged }: Props) {
             <RotateCcw /> თავიდან გენერაცია
           </Button>
         ) : null}
-        {item && (item.publishStatus === "failed" || item.publishStatus === "partial") ? (
+        {item && autoPublish && (item.publishStatus === "failed" || item.publishStatus === "partial") ? (
           <Button variant="secondary" onClick={() => retry("publish")} disabled={busy !== null}>
             <RotateCcw /> თავიდან გამოქვეყნება
           </Button>
@@ -299,15 +303,21 @@ export function SlotCard({ day, kind, slot, item, onChanged }: Props) {
   )
 }
 
-function StatusBadge({ item }: { item: DailyItem }) {
-  const showPublish = item.status === "ready"
+function StatusBadge({
+  item,
+  autoPublish,
+}: {
+  item: DailyItem
+  autoPublish: boolean
+}) {
+  const showPublish = autoPublish && item.status === "ready"
   const text = showPublish ? PUBLISH_LABEL[item.publishStatus] : GEN_LABEL[item.status]
   const tone =
     item.status === "failed" ||
-    item.publishStatus === "failed" ||
-    item.publishStatus === "partial"
+    (showPublish &&
+      (item.publishStatus === "failed" || item.publishStatus === "partial"))
       ? "bg-destructive/15 text-destructive"
-      : item.status === "ready" && item.publishStatus === "published"
+      : item.status === "ready" && (!showPublish || item.publishStatus === "published")
         ? "bg-primary/15 text-primary"
         : item.status === "ready"
           ? "bg-secondary text-secondary-foreground"

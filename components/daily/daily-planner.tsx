@@ -37,8 +37,6 @@ const SETUP_ITEMS: Array<{ key: keyof SetupStatus; label: string }> = [
   { key: "blob", label: "ფაილების საცავი (Vercel Blob)" },
   { key: "higgsfield", label: "Higgsfield API key (HF_API_KEY)" },
   { key: "scheduler", label: "ავტომატური გაშვება (CRON_SECRET)" },
-  { key: "facebook", label: "Facebook გვერდი (META_PAGE_ID, META_PAGE_ACCESS_TOKEN)" },
-  { key: "instagram", label: "Instagram (META_IG_USER_ID)" },
 ]
 
 function formatBytes(bytes: number): string {
@@ -134,6 +132,7 @@ export function DailyPlanner() {
     }
   }
 
+  const autoPublish = Boolean(setup?.facebook)
   const missing = setup ? SETUP_ITEMS.filter((item) => !setup[item.key]) : []
   const storageShare = view ? view.storage.used / view.storage.limit : 0
 
@@ -144,7 +143,10 @@ export function DailyPlanner() {
           <h1 className="font-heading text-2xl font-semibold">BeHero Daily</h1>
           <p className="text-sm text-muted-foreground">
             ყოველდღე {VIDEOS_PER_DAY} ვიდეო და {POSTERS_PER_DAY} პოსტერი. გენერაცია
-            06:00-ზე, გამოქვეყნება 08:00-დან საათში ერთი (თბილისის დრო).
+            იწყება 06:00-ზე და 08:00-მდე მზადაა (თბილისის დრო).
+            {autoPublish
+              ? " გამოქვეყნება Facebook-ზე და Instagram-ზე 08:00-დან, საათში ერთი."
+              : " გამოქვეყნება ხელით: ჩამოტვირთე და ატვირთე."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -289,6 +291,7 @@ export function DailyPlanner() {
                 kind="video"
                 slot={slot}
                 item={findItem(view, "video", slot)}
+                autoPublish={autoPublish}
                 onChanged={() => void load(view.day)}
               />
             ))}
@@ -301,6 +304,7 @@ export function DailyPlanner() {
                 kind="poster"
                 slot={slot}
                 item={findItem(view, "poster", slot)}
+                autoPublish={autoPublish}
                 onChanged={() => void load(view.day)}
               />
             ))}
