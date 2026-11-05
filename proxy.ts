@@ -1,13 +1,23 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
+import { SESSION_COOKIE, isValidSession } from "./daily/auth"
 import {
   DEVICE_COOKIE,
   DEVICE_COOKIE_OPTIONS,
   resolveDeviceId,
 } from "./generation/device"
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
+  const isLogin = request.nextUrl.pathname === "/login"
+  const signedIn = await isValidSession(
+    request.cookies.get(SESSION_COOKIE)?.value
+  )
+  if (!signedIn && !isLogin)
+    return NextResponse.redirect(new URL("/login", request.url))
+  if (signedIn && isLogin)
+    return NextResponse.redirect(new URL("/", request.url))
+
   const { deviceId, minted } = resolveDeviceId(
     request.cookies.get(DEVICE_COOKIE)?.value
   )
