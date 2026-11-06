@@ -266,6 +266,13 @@ export async function markSubmitFailed(
     attempts = attempts + 1, error = ${error}, updated_at = now() WHERE id = ${id}`
 }
 
+/** Account-level refusal (bad key): note it on the slot, keep the attempt. */
+export async function markKeyRejected(id: string, error: string): Promise<void> {
+  const sql = await db()
+  await sql`UPDATE daily_items SET error = ${error}, updated_at = now()
+    WHERE id = ${id} AND status = 'pending'`
+}
+
 export async function markReady(
   id: string,
   resultUrl: string,
