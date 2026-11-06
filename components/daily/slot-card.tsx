@@ -92,9 +92,7 @@ export function SlotCard({ day, kind, slot, item, autoPublish, onChanged }: Prop
       )
       setImage({ url: blob.url, bytes: file.size })
     } catch (caught) {
-      setError(
-        caught instanceof Error ? caught.message : "სურათი ვერ აიტვირთა."
-      )
+      setError(await explainUploadFailure(caught))
     } finally {
       setBusy(null)
     }
@@ -327,4 +325,23 @@ function StatusBadge({
       {text}
     </span>
   )
+}
+
+async function explainUploadFailure(caught: unknown): Promise<string> {
+  const fallback =
+    caught instanceof Error ? caught.message : "სურათი ვერ აიტვირთა."
+  try {
+    const response = await fetch("/api/daily/upload", { cache: "no-store" })
+    const state = (await response.json()) as {
+      signedIn?: boolean
+      blobConfigured?: boolean
+    }
+    if (state.signedIn === false)
+      return "სესია ამოიწურა. განაახლე გვერდი და თავიდან შედი პაროლით."
+    if (state.blobConfigured === false)
+      return "ფაილების საცავი (Vercel Blob) ამ დეპლოიში არ არის დაკავშირებული: BLOB_READ_WRITE_TOKEN აკლია. Vercel → Storage-ში Blob მიაბი პროექტს (Production), შემდეგ Deployments-ში გააკეთე Redeploy."
+  } catch {
+    // Fall through to the client's own message.
+  }
+  return `სურათი ვერ აიტვირთა: ${fallback}`
 }

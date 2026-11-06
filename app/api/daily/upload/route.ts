@@ -4,6 +4,21 @@ import { NextResponse } from "next/server"
 
 import { requireSession } from "@/daily/session"
 
+/** Why an upload cannot start, in words the planner can show. The Blob client
+    only reports "Failed to retrieve the client token" on any refusal. */
+export async function GET(): Promise<NextResponse> {
+  let signedIn = true
+  try {
+    await requireSession()
+  } catch {
+    signedIn = false
+  }
+  return NextResponse.json(
+    { signedIn, blobConfigured: Boolean(process.env.BLOB_READ_WRITE_TOKEN) },
+    { headers: { "Cache-Control": "no-store" } }
+  )
+}
+
 /** Issues a short-lived Vercel Blob client token for one start image. The
     browser uploads straight to Blob, so large photos skip the function body
     limit. Only a signed-in session gets a token. */
