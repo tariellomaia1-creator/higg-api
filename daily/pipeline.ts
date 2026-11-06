@@ -3,17 +3,11 @@ import "server-only"
 import { put } from "@vercel/blob"
 import sharp from "sharp"
 
-import { PlatformError, createPlatformClient } from "@/generation/platform"
-
 import {
   GENERATE_FROM_HOUR,
   MAX_ATTEMPTS,
-  posterInput,
-  posterModelPath,
   publishHour,
   tbilisiNow,
-  videoInput,
-  videoModelPath,
 } from "./config"
 import {
   listGeneratable,
@@ -27,6 +21,14 @@ import {
   updatePublish,
 } from "./db"
 import type { DailyItem, PublishStatus } from "./db"
+import {
+  KieError,
+  createKieTask,
+  getKieTask,
+  gptSunburstTask,
+  kieApiKey,
+  veoLiteTask,
+} from "./kie"
 import {
   createInstagramContainer,
   instagramContainerStatus,
@@ -46,16 +48,13 @@ export type TickReport = {
   notes: string[]
 }
 
-function platform() {
-  const apiKey = process.env.HF_API_KEY?.trim()
-  if (!apiKey)
+function requireKieKey(): string {
+  const key = kieApiKey()
+  if (!key)
     throw new Error(
-      "HF_API_KEY is not set on the server. Add your Higgsfield API key in Vercel → Settings → Environment Variables."
+      "KIE_API_KEY is not set on the server. Add your kie.ai API key in Vercel → Settings → Environment Variables, then redeploy."
     )
-  return createPlatformClient({
-    apiKey,
-    baseUrl: process.env.HF_API_BASE_URL?.trim() || "https://platform.higgsfield.ai",
-  })
+  return key
 }
 
 function message(caught: unknown): string {
@@ -66,10 +65,18 @@ function label(item: DailyItem): string {
   return `${item.day} ${item.kind === "video" ? "ვიდეო" : "პოსტერი"} ${item.slot + 1}`
 }
 
-const FAILED_STATES: Record<string, string> = {
-  failed: "გენერაცია ვერ მოხერხდა პლატფორმაზე.",
-  nsfw: "კონტენტის ფილტრმა დაბლოკა (nsfw). შეცვალე პრომტი ან სურათი.",
-  canceled: "მოთხოვნა გაუქმდა.",
+/** Account-level refusals: the slot is fine, so it keeps its retry and the
+    pass stops submitting until the account is fixed. */
+const ACCOUNT_ERRORS: Record<number, string> = {
+  401: "kie.ai-მ API key არ მიიღო. Vercel-ში KIE_API_KEY შეამოწმე (kie.ai/api-key), შემდეგ Redeploy.",
+  402: "kie.ai-ზე კრედიტი არ კმარა. შეავსე ბალანსი kie.ai-ზე და სლოტები თავისით გაგრძელდება.",
+}
+
+/** Busy or maintenance answers: try again on the next pass, no retry spent. */
+function isTransient(caught: unknown): boolean {
+  if (caught instanceof TypeError) return true
+  if (!(caught instanceof KieError)) return false
+  return caught.code === 429 || caught.code === 455 || caught.code >= 501
 }
 
 /** One scheduler pass: finish running generations, start due ones, then
@@ -88,28 +95,22 @@ export async function runTick(
     published: 0,
     notes: [],
   }
-  const client = platform()
+  const apiKey = requireKieKey()
 
   // 1. Running generations.
   for (const item of await listGenerating()) {
     try {
-      const status = await client.status(item.requestId!)
-      if (status.status === "completed") {
-        const source =
-          item.kind === "video" ? status.video?.url : status.images?.[0]?.url
-        if (!source) throw new Error("Completed without a result URL.")
-        const stored = await storeResult(item, source)
+      const task = await getKieTask(apiKey, item.requestId!)
+      if (task.state === "success") {
+        if (!task.url) throw new Error("Completed without a result URL.")
+        const stored = await storeResult(item, task.url)
         await markReady(item.id, stored.url, stored.bytes)
         report.completed++
-      } else if (status.status in FAILED_STATES) {
-        await failAttempt(item, FAILED_STATES[status.status]!, report)
+      } else if (task.state === "fail") {
+        await failAttempt(item, task.reason, report)
       }
     } catch (caught) {
-      // A lost request (404) or a broken result is a failed attempt; network
-      // trouble and 5xx are asked again on the next pass.
-      const transient =
-        caught instanceof PlatformError ? caught.status >= 500 : false
-      if (transient || isNetworkError(caught))
+      if (isTransient(caught) || caught instanceof KieError && caught.code in ACCOUNT_ERRORS)
         report.notes.push(`${label(item)}: ${message(caught)}`)
       else await failAttempt(item, message(caught), report)
     }
@@ -123,31 +124,27 @@ export async function runTick(
   )
   for (const item of due) {
     if (item.attempts >= MAX_ATTEMPTS) continue
-    const path = item.kind === "video" ? videoModelPath() : posterModelPath()
-    const input =
+    const task =
       item.kind === "video"
-        ? videoInput(item.prompt, item.startImageUrl!)
-        : posterInput(item.prompt)
+        ? veoLiteTask(item.prompt, item.startImageUrl!)
+        : gptSunburstTask(item.prompt)
     try {
-      const queued = await client.submit(
-        path,
-        input,
-        `${item.id}-${item.attempts + 1}`
-      )
-      await markSubmitted(item.id, queued.requestId)
+      const taskId = await createKieTask(apiKey, task)
+      await markSubmitted(item.id, taskId)
       report.submitted++
     } catch (caught) {
-      // A rejected key is an account problem, not this slot's: keep the slot
-      // pending without spending its retry, and stop submitting until fixed.
-      if (caught instanceof PlatformError && caught.status === 401) {
-        const reason =
-          "Higgsfield-მა API key არ მიიღო. Vercel-ში HF_API_KEY უნდა იყოს სრული გასაღები ფორმატით key-id:key-secret (open.higgsfield.ai → API keys), შემდეგ Redeploy."
+      if (caught instanceof KieError && caught.code in ACCOUNT_ERRORS) {
+        const reason = ACCOUNT_ERRORS[caught.code]!
         for (const pending of due) await markKeyRejected(pending.id, reason)
         report.notes.push(reason)
         break
       }
+      if (isTransient(caught)) {
+        report.notes.push(`${label(item)}: ${message(caught)}`)
+        continue
+      }
       const final = item.attempts + 1 >= MAX_ATTEMPTS
-      await markSubmitFailed(item.id, submitError(caught, path), final)
+      await markSubmitFailed(item.id, message(caught), final)
       if (final) report.failed++
     }
   }
@@ -181,18 +178,6 @@ async function failAttempt(item: DailyItem, reason: string, report: TickReport) 
   const final = item.attempts >= MAX_ATTEMPTS
   await markAttemptFailed(item.id, reason, final)
   if (final) report.failed++
-}
-
-function submitError(caught: unknown, path: string): string {
-  if (caught instanceof PlatformError && caught.status === 404)
-    return `მოდელი ვერ მოიძებნა (${path}). შეამოწმე HF_VIDEO_MODEL_PATH / HF_POSTER_MODEL_PATH.`
-  if (caught instanceof PlatformError && caught.status === 403)
-    return "Higgsfield-ზე კრედიტი არ კმარა ან წვდომა აკრძალულია."
-  return message(caught)
-}
-
-function isNetworkError(caught: unknown): boolean {
-  return caught instanceof TypeError
 }
 
 async function storeResult(

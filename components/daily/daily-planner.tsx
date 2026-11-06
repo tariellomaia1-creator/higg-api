@@ -35,7 +35,7 @@ import { SlotCard } from "./slot-card"
 const SETUP_ITEMS: Array<{ key: keyof SetupStatus; label: string }> = [
   { key: "database", label: "მონაცემთა ბაზა (Neon Postgres)" },
   { key: "blob", label: "ფაილების საცავი (Vercel Blob)" },
-  { key: "higgsfield", label: "Higgsfield API key (HF_API_KEY)" },
+  { key: "generator", label: "kie.ai API key (KIE_API_KEY)" },
   { key: "scheduler", label: "ავტომატური გაშვება (CRON_SECRET)" },
 ]
 
@@ -284,7 +284,7 @@ export function DailyPlanner() {
             ) : null}
           </div>
 
-          <DaySection title="ვიდეოები · Veo 3.1 Lite · 9:16 · 8 წმ · ხმით">
+          <DaySection title="ვიდეოები · Veo 3.1 Lite · 9:16 · 8 წმ · 720p · ხმით">
             {Array.from({ length: VIDEOS_PER_DAY }, (_, slot) => (
               <SlotCard
                 key={slotKey(view, "video", slot)}
@@ -297,7 +297,7 @@ export function DailyPlanner() {
               />
             ))}
           </DaySection>
-          <DaySection title="პოსტერები · GPT Image 2.6 · 1:1 · 1k · medium">
+          <DaySection title="პოსტერები · GPT Image 2.6 Sunburst · 1:1 · 1K">
             {Array.from({ length: POSTERS_PER_DAY }, (_, slot) => (
               <SlotCard
                 key={slotKey(view, "poster", slot)}

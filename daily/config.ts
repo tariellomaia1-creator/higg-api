@@ -51,37 +51,6 @@ export function formatHour(hour: number): string {
   return `${String(hour).padStart(2, "0")}:00`
 }
 
-/** Model endpoints on the Higgsfield platform. Overridable from the server
-    environment, because the platform path can differ from the catalog name. */
-export function videoModelPath(): string {
-  return (
-    process.env.HF_VIDEO_MODEL_PATH?.trim() || "veo3.1/lite/image-to-video"
-  )
-}
-
-export function posterModelPath(): string {
-  return process.env.HF_POSTER_MODEL_PATH?.trim() || "openai/gpt-image-2.6"
-}
-
-export function videoInput(prompt: string, startImageUrl: string) {
-  return {
-    prompt,
-    image_url: startImageUrl,
-    aspect_ratio: "9:16",
-    duration: 8,
-    generate_audio: true,
-  }
-}
-
-export function posterInput(prompt: string) {
-  return {
-    prompt,
-    aspect_ratio: "1:1",
-    resolution: "1k",
-    quality: "medium",
-  }
-}
-
 /** Vercel Blob storage on the Hobby plan; overridable with BLOB_LIMIT_MB. */
 export function storageLimitBytes(): number {
   const mb = Number(process.env.BLOB_LIMIT_MB)
