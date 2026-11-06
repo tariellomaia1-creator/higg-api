@@ -22,6 +22,8 @@ import {
 import type { DailyItem } from "@/daily/db"
 
 import { Button } from "@/components/ui/button"
+import { downloadSrc, fileNameFor, mediaSrc, ResultPreview } from "./media"
+import { StageState, StepStrip } from "./progress"
 import { cn } from "@/lib/utils"
 
 const GEN_LABEL: Record<DailyItem["status"], string> = {
@@ -155,35 +157,21 @@ export function SlotCard({ day, kind, slot, item, autoPublish, onChanged }: Prop
       </header>
 
       {item?.status === "ready" && item.resultUrl ? (
-        <div className="flex flex-col gap-2">
-          <div
-            className={cn(
-              "overflow-hidden rounded-xl bg-muted",
-              kind === "video" ? "mx-auto aspect-[9/16] w-full max-w-56" : "aspect-square"
-            )}
-          >
-            {kind === "video" ? (
-              <video
-                src={item.resultUrl}
-                controls
-                playsInline
-                preload="metadata"
-                className="size-full object-cover"
-              />
-            ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={item.resultUrl} alt={title} className="size-full object-cover" />
-            )}
-          </div>
+        <div className={cn("flex flex-col gap-2", kind === "video" && "mx-auto w-full max-w-56")}>
+          <ResultPreview item={item} />
           <a
-            href={downloadHref(item.resultUrl)}
-            download
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-sm hover:bg-muted"
+            href={downloadSrc(item.resultUrl, fileNameFor(item))}
+            download={fileNameFor(item)}
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/80"
           >
             <Download className="size-4" /> ჩამოტვირთვა
           </a>
         </div>
-      ) : null}
+      ) : (
+        <StageState kind={kind} item={item} unsaved={dirty} />
+      )}
+
+      <StepStrip item={item} unsaved={dirty} />
 
       <CreditLine kind={kind} item={item} />
 
@@ -198,7 +186,7 @@ export function SlotCard({ day, kind, slot, item, autoPublish, onChanged }: Prop
           >
             {image ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={image.url} alt="" className="size-full object-cover" />
+              <img src={mediaSrc(image.url)} alt="" className="size-full object-cover" />
             ) : busy === "upload" ? (
               <Loader2 className="size-5 animate-spin" />
             ) : (
@@ -347,18 +335,6 @@ async function explainUploadFailure(caught: unknown): Promise<string> {
     // Fall through to the client's own message.
   }
   return `სურათი ვერ აიტვირთა: ${fallback}`
-}
-
-/** Vercel Blob serves a download when asked with ?download=1; other links
-    (kie.ai's temporary result URL) are signed and must stay untouched. */
-function downloadHref(url: string): string {
-  try {
-    return new URL(url).hostname.endsWith(".blob.vercel-storage.com")
-      ? `${url}?download=1`
-      : url
-  } catch {
-    return url
-  }
 }
 
 function CreditLine({ kind, item }: { kind: ItemKind; item: DailyItem | undefined }) {

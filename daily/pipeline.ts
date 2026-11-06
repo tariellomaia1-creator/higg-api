@@ -1,6 +1,8 @@
 import "server-only"
 
-import { put } from "@vercel/blob"
+import { del } from "@vercel/blob"
+
+import { isBlobUrl, readFile, storeFile } from "./blob-server"
 import sharp from "sharp"
 
 import {
@@ -30,6 +32,7 @@ import {
   getKieBalance,
   getKieTask,
   gptSunburstTask,
+  uploadToKie,
   kieApiKey,
   veoLiteTask,
 } from "./kie"
@@ -102,34 +105,10 @@ export async function runTick(
   const apiKey = requireKieKey()
 
   // 1. Running generations.
-  for (const item of await listGenerating()) {
-    try {
-      const task = await getKieTask(apiKey, item.requestId!)
-      if (task.state !== "pending") await addCreditsUsed(item.id, task.credits)
-      if (task.state === "success") {
-        if (!task.url) throw new Error("Completed without a result URL.")
-        // The result is paid for, so it is never regenerated. If copying it
-        // into our storage fails, show kie.ai's own link (kept there for a
-        // limited time) and say why, so it can be downloaded right away.
-        try {
-          const stored = await storeResult(item, task.url)
-          await markReady(item.id, stored.url, stored.bytes)
-        } catch (caught) {
-          const reason = `საცავში შენახვა ვერ მოხერხდა (${message(caught)}). ნაჩვენებია kie.ai-ის დროებითი ბმული: ჩამოტვირთე დღესვე.`
-          await markReady(item.id, task.url, 0)
-          await noteError(item.id, reason)
-          report.notes.push(`${label(item)}: ${reason}`)
-        }
-        report.completed++
-      } else if (task.state === "fail") {
-        await failAttempt(item, task.reason, report)
-      }
-    } catch (caught) {
-      if (isTransient(caught) || caught instanceof KieError && caught.code in ACCOUNT_ERRORS)
-        report.notes.push(`${label(item)}: ${message(caught)}`)
-      else await failAttempt(item, message(caught), report)
-    }
-  }
+  const polled = await pollInFlight(apiKey)
+  report.completed += polled.completed
+  report.failed += polled.failed
+  report.notes.push(...polled.notes)
 
   // 2. Start what is due: today's slots from 06:00 (or at once when run by
   //    hand from the planner), and yesterday's leftovers.
@@ -141,11 +120,11 @@ export async function runTick(
   )
   for (const item of due) {
     if (item.attempts >= MAX_ATTEMPTS) continue
-    const task =
-      item.kind === "video"
-        ? veoLiteTask(item.prompt, item.startImageUrl!)
-        : gptSunburstTask(item.prompt)
     try {
+      const task =
+        item.kind === "video"
+          ? veoLiteTask(item.prompt, await startImageForKie(apiKey, item))
+          : gptSunburstTask(item.prompt)
       const taskId = await createKieTask(apiKey, task)
       await markSubmitted(item.id, taskId)
       report.submitted++
@@ -196,10 +175,52 @@ export async function runTick(
   return report
 }
 
-async function failAttempt(item: DailyItem, reason: string, report: TickReport) {
-  const final = item.attempts >= MAX_ATTEMPTS
-  await markAttemptFailed(item.id, reason, final)
-  if (final) report.failed++
+/** Checks every running kie.ai task once and stores finished results. Never
+    submits anything, so the planner can call it while it is open. */
+export async function pollInFlight(
+  apiKey = requireKieKey()
+): Promise<Pick<TickReport, "completed" | "failed" | "notes">> {
+  const report = { completed: 0, failed: 0, notes: [] as string[] }
+  for (const item of await listGenerating()) {
+    try {
+      const task = await getKieTask(apiKey, item.requestId!)
+      if (task.state === "success") {
+        if (!task.url) throw new Error("Completed without a result URL.")
+        // The result is paid for, so it is never regenerated. If copying it
+        // into our storage fails, show kie.ai's own link (kept there for a
+        // limited time) and say why, so it can be downloaded right away.
+        let finished = false
+        try {
+          const stored = await storeResult(item, task.url)
+          finished = await markReady(item.id, stored.url, stored.bytes)
+          if (!finished) await del(stored.url).catch(() => undefined)
+        } catch (caught) {
+          const reason = `საცავში შენახვა ვერ მოხერხდა (${message(caught)}). ნაჩვენებია kie.ai-ის დროებითი ბმული: ჩამოტვირთე დღესვე.`
+          finished = await markReady(item.id, task.url, 0)
+          if (finished) await noteError(item.id, reason)
+          report.notes.push(`${label(item)}: ${reason}`)
+        }
+        if (finished) {
+          await addCreditsUsed(item.id, task.credits)
+          report.completed++
+        }
+      } else if (task.state === "fail") {
+        await addCreditsUsed(item.id, task.credits)
+        const final = item.attempts >= MAX_ATTEMPTS
+        await markAttemptFailed(item.id, task.reason, final)
+        if (final) report.failed++
+      }
+    } catch (caught) {
+      if (isTransient(caught) || (caught instanceof KieError && caught.code in ACCOUNT_ERRORS))
+        report.notes.push(`${label(item)}: ${message(caught)}`)
+      else {
+        const final = item.attempts >= MAX_ATTEMPTS
+        await markAttemptFailed(item.id, message(caught), final)
+        if (final) report.failed++
+      }
+    }
+  }
+  return report
 }
 
 async function storeResult(
@@ -212,21 +233,28 @@ async function storeResult(
   const raw = Buffer.from(await response.arrayBuffer())
   const name = `daily/${item.day}/${item.kind}-${item.slot + 1}`
   if (item.kind === "video") {
-    const blob = await put(`${name}.mp4`, raw, {
-      access: "public",
-      contentType: "video/mp4",
-      addRandomSuffix: true,
-    })
-    return { url: blob.url, bytes: raw.byteLength }
+    const url = await storeFile(`${name}.mp4`, raw, "video/mp4")
+    return { url, bytes: raw.byteLength }
   }
   // Instagram only accepts JPEG images.
   const jpeg = await sharp(raw).jpeg({ quality: 92 }).toBuffer()
-  const blob = await put(`${name}.jpg`, jpeg, {
-    access: "public",
-    contentType: "image/jpeg",
-    addRandomSuffix: true,
-  })
-  return { url: blob.url, bytes: jpeg.byteLength }
+  const url = await storeFile(`${name}.jpg`, jpeg, "image/jpeg")
+  return { url, bytes: jpeg.byteLength }
+}
+
+/** kie.ai must be able to download the start image. A file in our Blob store
+    may be private, so it is copied to kie.ai's own (free, 24 h) storage. */
+async function startImageForKie(apiKey: string, item: DailyItem): Promise<string> {
+  const source = item.startImageUrl!
+  if (!isBlobUrl(source)) return source
+  const { bytes, contentType } = await readFile(source)
+  const extension = contentType.split("/")[1]?.replace("jpeg", "jpg") || "jpg"
+  return uploadToKie(
+    apiKey,
+    bytes,
+    contentType,
+    `${item.day}-video-${item.slot + 1}.${extension}`
+  )
 }
 
 /** Posts to the Facebook Page once, and walks the Instagram container from

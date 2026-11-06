@@ -4,12 +4,13 @@ import {
   ChevronLeft,
   ChevronRight,
   Clapperboard,
+  Images,
   LogOut,
   Play,
   Trash2,
 } from "lucide-react"
 import Link from "next/link"
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 import {
   ESTIMATED_CREDITS,
@@ -26,6 +27,7 @@ import {
   getDayView,
   getSetupStatus,
   logout,
+  refreshGenerating,
   runSchedulerNow,
 } from "@/daily/actions"
 import type { DayView, Result, SetupStatus } from "@/daily/actions"
@@ -33,6 +35,7 @@ import type { DayView, Result, SetupStatus } from "@/daily/actions"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
+import { itemTitle } from "./media"
 import { SlotCard } from "./slot-card"
 
 const SETUP_ITEMS: Array<{ key: keyof SetupStatus; label: string }> = [
@@ -72,15 +75,33 @@ export function DailyPlanner() {
     setBalance(result.ok ? { value: result.data } : { error: result.error })
   }, [])
 
+  const lastStatus = useRef<Map<string, string>>(new Map())
+  const [toast, setToast] = useState<{ text: string; tone: "ok" | "bad" } | null>(null)
+
   const apply = useCallback((result: Result<DayView>) => {
     if (!result.ok) {
       setError(result.error)
       return
     }
     setError(null)
+    // Announce slots that just finished while the page was open.
+    for (const item of result.data.items) {
+      const before = lastStatus.current.get(item.id)
+      if (before === "generating" && item.status === "ready")
+        setToast({ text: `✓ ${itemTitle(item)} მზადაა`, tone: "ok" })
+      else if (before === "generating" && item.status === "failed")
+        setToast({ text: `${itemTitle(item)} ვერ შეიქმნა`, tone: "bad" })
+      lastStatus.current.set(item.id, item.status)
+    }
     setView(result.data)
     setDay(result.data.day)
   }, [])
+
+  useEffect(() => {
+    if (!toast) return
+    const timer = window.setTimeout(() => setToast(null), 6000)
+    return () => window.clearTimeout(timer)
+  }, [toast])
 
   const load = useCallback(
     async (target: string | null) => apply(await getDayView(target)),
@@ -109,10 +130,18 @@ export function DailyPlanner() {
   )
   useEffect(() => {
     if (!day) return
-    const timer = window.setInterval(() => {
-      void load(day)
-      void refreshBalance()
-    }, active ? 20_000 : 60_000)
+    const timer = window.setInterval(
+      () => {
+        void (async () => {
+          // While something is generating, check kie.ai from here too, so
+          // results show up without waiting for the scheduler.
+          if (active) await refreshGenerating()
+          await load(day)
+          if (active) await refreshBalance()
+        })()
+      },
+      active ? 12_000 : 60_000
+    )
     return () => window.clearInterval(timer)
   }, [active, day, load, refreshBalance])
 
@@ -173,6 +202,12 @@ export function DailyPlanner() {
             <Play /> {running ? "მუშაობს…" : "ახლავე გაშვება"}
           </Button>
           <Link
+            href="/gallery"
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-2.5 text-sm hover:bg-muted"
+          >
+            <Images className="size-4" /> გალერეა
+          </Link>
+          <Link
             href="/studio"
             className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-2.5 text-sm hover:bg-muted"
           >
@@ -187,6 +222,18 @@ export function DailyPlanner() {
       </div>
 
       <CreditPanel balance={balance} view={view} onRefresh={() => void refreshBalance()} />
+
+      {toast ? (
+        <div
+          role="status"
+          className={cn(
+            "fixed right-4 bottom-4 z-50 rounded-xl px-4 py-3 text-sm font-medium shadow-lg",
+            toast.tone === "ok" ? "bg-primary text-primary-foreground" : "bg-destructive text-white"
+          )}
+        >
+          {toast.text}
+        </div>
+      ) : null}
 
       {missing.length ? (
         <section className="rounded-2xl border border-border bg-card p-4 text-sm">

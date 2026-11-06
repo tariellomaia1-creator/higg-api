@@ -20,6 +20,7 @@ import {
   getItem,
   listDay,
   listDaysWithContent,
+  listFinished,
   resetForRetry,
   resetPublish,
   storageUsedBytes,
@@ -28,7 +29,7 @@ import {
 import type { DailyItem } from "./db"
 import { getKieBalance, kieApiKey } from "./kie"
 import { metaConfig } from "./meta"
-import { runTick } from "./pipeline"
+import { pollInFlight, runTick } from "./pipeline"
 import type { TickReport } from "./pipeline"
 import { requireSession } from "./session"
 
@@ -232,6 +233,17 @@ export async function retryPublish(id: unknown): Promise<Result<null>> {
     await resetPublish(id)
     return null
   })
+}
+
+/** Checks running generations once (no new submissions). Called by the open
+    planner so results appear without waiting for the cron. */
+export async function refreshGenerating(): Promise<Result<number>> {
+  return guard(async () => (await pollInFlight()).completed)
+}
+
+/** Every finished video and poster, newest first. */
+export async function getGallery(): Promise<Result<DailyItem[]>> {
+  return guard(() => listFinished())
 }
 
 /** Runs one scheduler pass now. Unlike the cron, it starts today's planned
