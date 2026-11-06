@@ -125,6 +125,43 @@ export async function getKieTask(
   return { state: "pending" }
 }
 
+/** Uploads a file to kie.ai's own temporary storage (kept 24 hours, free)
+    and returns a URL kie.ai's models can always fetch. Used for start images,
+    because a private Vercel Blob URL is not reachable from kie.ai. */
+export async function uploadToKie(
+  apiKey: string,
+  bytes: Buffer,
+  contentType: string,
+  fileName: string
+): Promise<string> {
+  const form = new FormData()
+  form.append("file", new Blob([new Uint8Array(bytes)], { type: contentType }), fileName)
+  form.append("uploadPath", "behero-daily/start")
+  form.append("fileName", fileName)
+  const response = await fetch(
+    "https://kieai.redpandaai.co/api/file-stream-upload",
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body: form,
+      cache: "no-store",
+    }
+  )
+  const payload = asRecord(await response.json().catch(() => null))
+  const code = Number(payload.code ?? response.status)
+  if (!response.ok || code !== 200)
+    throw new KieError(
+      code || response.status,
+      typeof payload.msg === "string" && payload.msg
+        ? `Start image upload to kie.ai failed: ${payload.msg}`
+        : `Start image upload to kie.ai failed (${code || response.status}).`
+    )
+  const url = asRecord(payload.data).downloadUrl
+  if (typeof url !== "string" || !url)
+    throw new KieError(502, "kie.ai upload returned no file URL.")
+  return url
+}
+
 /** Remaining credits on the account that owns this key. */
 export async function getKieBalance(apiKey: string): Promise<number> {
   const response = await fetch(`${BASE_URL}/api/v1/chat/credit`, {

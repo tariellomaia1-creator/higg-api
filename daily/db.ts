@@ -35,6 +35,9 @@ export type DailyItem = {
   publishedAt: string | null
   /** kie.ai credits charged for this slot so far (all attempts). */
   creditsUsed: number
+  /** When the current attempt was sent to kie.ai, and when it finished. */
+  submittedAt: string | null
+  completedAt: string | null
 }
 
 type Sql = ReturnType<typeof neon>
@@ -94,6 +97,8 @@ async function createSchema(sql: Sql): Promise<void> {
       UNIQUE (day, kind, slot)
     )`
   await sql`ALTER TABLE daily_items ADD COLUMN IF NOT EXISTS credits_used numeric NOT NULL DEFAULT 0`
+  await sql`ALTER TABLE daily_items ADD COLUMN IF NOT EXISTS submitted_at timestamptz`
+  await sql`ALTER TABLE daily_items ADD COLUMN IF NOT EXISTS completed_at timestamptz`
 }
 
 function str(value: unknown): string | null {
@@ -136,7 +141,14 @@ function toItem(row: Record<string, unknown>): DailyItem {
         ? row.published_at.toISOString()
         : str(row.published_at),
     creditsUsed: num(row.credits_used),
+    submittedAt: isoOrNull(row.submitted_at),
+    completedAt: isoOrNull(row.completed_at),
   }
+}
+
+function isoOrNull(value: unknown): string | null {
+  if (value instanceof Date) return value.toISOString()
+  return typeof value === "string" ? value : null
 }
 
 function rows(result: unknown): DailyItem[] {
@@ -245,7 +257,8 @@ export async function markSubmitted(
 ): Promise<void> {
   const sql = await db()
   await sql`UPDATE daily_items SET status = 'generating', request_id = ${requestId},
-    attempts = attempts + 1, error = NULL, updated_at = now() WHERE id = ${id}`
+    attempts = attempts + 1, error = NULL, submitted_at = now(), completed_at = NULL,
+    updated_at = now() WHERE id = ${id}`
 }
 
 /** A failed attempt: retried on the next tick while attempts remain. */
@@ -290,14 +303,18 @@ export async function noteError(id: string, error: string): Promise<void> {
   await sql`UPDATE daily_items SET error = ${error}, updated_at = now() WHERE id = ${id}`
 }
 
+/** Marks a running slot ready. Returns false when another pass (the cron
+    or an open planner) already finished it, so a duplicate copy can be removed. */
 export async function markReady(
   id: string,
   resultUrl: string,
   resultBytes: number
-): Promise<void> {
+): Promise<boolean> {
   const sql = await db()
-  await sql`UPDATE daily_items SET status = 'ready', result_url = ${resultUrl},
-    result_bytes = ${resultBytes}, error = NULL, updated_at = now() WHERE id = ${id}`
+  const updated = await sql`UPDATE daily_items SET status = 'ready', result_url = ${resultUrl},
+    result_bytes = ${resultBytes}, error = NULL, completed_at = now(), updated_at = now()
+    WHERE id = ${id} AND status = 'generating' RETURNING id`
+  return Array.isArray(updated) && updated.length > 0
 }
 
 export async function resetForRetry(id: string): Promise<void> {
@@ -359,4 +376,12 @@ export async function listDaysWithContent(): Promise<
         return { day: dayString(row.day), bytes: num(row.bytes), count: num(row.count) }
       })
     : []
+}
+
+/** Finished results across all days, newest first, for the gallery. */
+export async function listFinished(limit = 300): Promise<DailyItem[]> {
+  const sql = await db()
+  return rows(await sql`
+    SELECT * FROM daily_items WHERE status = 'ready' AND result_url IS NOT NULL
+    ORDER BY day DESC, COALESCE(completed_at, updated_at) DESC LIMIT ${limit}`)
 }
