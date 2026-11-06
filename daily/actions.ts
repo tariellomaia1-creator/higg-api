@@ -4,6 +4,7 @@ import { del } from "@vercel/blob"
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 
+import { blobConfigured } from "./blob"
 import {
   SESSION_COOKIE,
   SESSION_MAX_AGE,
@@ -100,7 +101,7 @@ export async function getSetupStatus(): Promise<Result<SetupStatus>> {
     const meta = metaConfig()
     return {
       database: Boolean(process.env.DATABASE_URL ?? process.env.POSTGRES_URL),
-      blob: Boolean(process.env.BLOB_READ_WRITE_TOKEN),
+      blob: blobConfigured(),
       higgsfield: Boolean(process.env.HF_API_KEY?.trim()),
       facebook: Boolean(meta),
       instagram: Boolean(meta?.igUserId),
@@ -238,7 +239,7 @@ function blobUrls(items: DailyItem[]): string[] {
 
 async function removeBlobs(urls: string[]): Promise<void> {
   const own = urls.filter(isOwnBlobUrl)
-  if (own.length === 0 || !process.env.BLOB_READ_WRITE_TOKEN) return
+  if (own.length === 0 || !blobConfigured()) return
   try {
     await del(own)
   } catch (caught) {

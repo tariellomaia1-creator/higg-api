@@ -1,6 +1,6 @@
 "use client"
 
-import { upload } from "@vercel/blob/client"
+import { uploadPresigned } from "@vercel/blob/client"
 import {
   Download,
   ImagePlus,
@@ -81,7 +81,7 @@ export function SlotCard({ day, kind, slot, item, autoPublish, onChanged }: Prop
     setBusy("upload")
     try {
       const extension = file.type.split("/")[1] ?? "jpg"
-      const blob = await upload(
+      const blob = await uploadPresigned(
         `daily/start/${day}-video-${slot + 1}.${extension}`,
         file,
         {
@@ -339,7 +339,7 @@ async function explainUploadFailure(caught: unknown): Promise<string> {
     if (state.signedIn === false)
       return "სესია ამოიწურა. განაახლე გვერდი და თავიდან შედი პაროლით."
     if (state.blobConfigured === false)
-      return "ფაილების საცავი (Vercel Blob) ამ დეპლოიში არ არის დაკავშირებული: BLOB_READ_WRITE_TOKEN აკლია. Vercel → Storage-ში Blob მიაბი პროექტს (Production), შემდეგ Deployments-ში გააკეთე Redeploy."
+      return "ფაილების საცავი (Vercel Blob) ამ დეპლოიში არ არის დაკავშირებული (BLOB_STORE_ID ან BLOB_READ_WRITE_TOKEN აკლია). Vercel → Storage-ში Blob მიაბი პროექტს (Production), შემდეგ Deployments-ში გააკეთე Redeploy."
   } catch {
     // Fall through to the client's own message.
   }
