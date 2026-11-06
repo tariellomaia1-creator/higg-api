@@ -12,7 +12,7 @@ import {
   sessionToken,
   sitePassword,
 } from "./auth"
-import { isDay, slotCount, storageLimitBytes, tbilisiNow } from "./config"
+import { addDays, isDay, slotCount, storageLimitBytes, tbilisiNow } from "./config"
 import type { ItemKind } from "./config"
 import {
   clearSlot,
@@ -21,6 +21,7 @@ import {
   listDay,
   listDaysWithContent,
   listFinished,
+  listRange,
   resetForRetry,
   resetPublish,
   storageUsedBytes,
@@ -156,6 +157,20 @@ function isOwnBlobUrl(value: string): boolean {
   } catch {
     return false
   }
+}
+
+/** Which slots are already taken from `from` for `days` days, so a batch
+    only fills free days. */
+export async function getTakenSlots(
+  from: unknown,
+  days: unknown
+): Promise<Result<Array<{ day: string; kind: ItemKind; slot: number }>>> {
+  return guard(async () => {
+    if (!isDay(from)) throw new Error("Invalid day.")
+    const span = Math.min(Math.max(Number(days) || 1, 1), 400)
+    const items = await listRange(from, addDays(from, span - 1))
+    return items.map((item) => ({ day: item.day, kind: item.kind, slot: item.slot }))
+  })
 }
 
 export async function savePlanItem(input: {

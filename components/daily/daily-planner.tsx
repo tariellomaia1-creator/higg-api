@@ -5,6 +5,7 @@ import {
   ChevronRight,
   Clapperboard,
   Images,
+  Layers,
   LogOut,
   Play,
   Trash2,
@@ -201,6 +202,12 @@ export function DailyPlanner() {
           <Button variant="outline" onClick={runNow} disabled={running}>
             <Play /> {running ? "მუშაობს…" : "ახლავე გაშვება"}
           </Button>
+          <Link
+            href="/batch"
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-2.5 text-sm hover:bg-muted"
+          >
+            <Layers className="size-4" /> Batch
+          </Link>
           <Link
             href="/gallery"
             className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-2.5 text-sm hover:bg-muted"

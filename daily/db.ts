@@ -164,6 +164,14 @@ export async function listDay(day: string): Promise<DailyItem[]> {
   )
 }
 
+/** Slots planned between two days (inclusive), for batch scheduling. */
+export async function listRange(from: string, to: string): Promise<DailyItem[]> {
+  const sql = await db()
+  return rows(
+    await sql`SELECT * FROM daily_items WHERE day >= ${from} AND day <= ${to} ORDER BY day, kind, slot`
+  )
+}
+
 export async function getItem(id: string): Promise<DailyItem | null> {
   const sql = await db()
   return rows(await sql`SELECT * FROM daily_items WHERE id = ${id}`)[0] ?? null
