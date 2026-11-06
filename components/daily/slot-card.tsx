@@ -176,7 +176,8 @@ export function SlotCard({ day, kind, slot, item, autoPublish, onChanged }: Prop
             )}
           </div>
           <a
-            href={`${item.resultUrl}?download=1`}
+            href={downloadHref(item.resultUrl)}
+            download
             className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border px-2.5 py-1.5 text-sm hover:bg-muted"
           >
             <Download className="size-4" /> ჩამოტვირთვა
@@ -344,4 +345,16 @@ async function explainUploadFailure(caught: unknown): Promise<string> {
     // Fall through to the client's own message.
   }
   return `სურათი ვერ აიტვირთა: ${fallback}`
+}
+
+/** Vercel Blob serves a download when asked with ?download=1; other links
+    (kie.ai's temporary result URL) are signed and must stay untouched. */
+function downloadHref(url: string): string {
+  try {
+    return new URL(url).hostname.endsWith(".blob.vercel-storage.com")
+      ? `${url}?download=1`
+      : url
+  } catch {
+    return url
+  }
 }

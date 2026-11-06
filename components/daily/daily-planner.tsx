@@ -333,7 +333,7 @@ function DaySection({ title, children }: { title: string; children: React.ReactN
   return (
     <section className="flex flex-col gap-3">
       <h2 className="font-heading text-lg font-semibold">{title}</h2>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">{children}</div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{children}</div>
     </section>
   )
 }

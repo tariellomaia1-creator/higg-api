@@ -1,7 +1,7 @@
 /** Daily content plan: fixed counts, models and the Tbilisi publishing clock. */
 
-export const VIDEOS_PER_DAY = 5
-export const POSTERS_PER_DAY = 5
+export const VIDEOS_PER_DAY = 1
+export const POSTERS_PER_DAY = 1
 
 /** Generation starts at 06:00 Tbilisi so everything is ready by 08:00. */
 export const GENERATE_FROM_HOUR = 6
@@ -42,7 +42,7 @@ export function slotCount(kind: ItemKind): number {
   return kind === "video" ? VIDEOS_PER_DAY : POSTERS_PER_DAY
 }
 
-/** Video 1 at 08:00, poster 1 at 09:00, video 2 at 10:00 … poster 5 at 17:00. */
+/** Video 1 at 08:00, poster 1 at 09:00, then alternating hourly if more slots are added. */
 export function publishHour(kind: ItemKind, slot: number): number {
   return PUBLISH_FROM_HOUR + slot * 2 + (kind === "poster" ? 1 : 0)
 }

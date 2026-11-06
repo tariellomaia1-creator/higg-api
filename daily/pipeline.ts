@@ -7,6 +7,7 @@ import {
   GENERATE_FROM_HOUR,
   MAX_ATTEMPTS,
   publishHour,
+  slotCount,
   tbilisiNow,
 } from "./config"
 import {
@@ -18,6 +19,7 @@ import {
   markSubmitFailed,
   markKeyRejected,
   markSubmitted,
+  noteError,
   updatePublish,
 } from "./db"
 import type { DailyItem, PublishStatus } from "./db"
@@ -103,8 +105,18 @@ export async function runTick(
       const task = await getKieTask(apiKey, item.requestId!)
       if (task.state === "success") {
         if (!task.url) throw new Error("Completed without a result URL.")
-        const stored = await storeResult(item, task.url)
-        await markReady(item.id, stored.url, stored.bytes)
+        // The result is paid for, so it is never regenerated. If copying it
+        // into our storage fails, show kie.ai's own link (kept there for a
+        // limited time) and say why, so it can be downloaded right away.
+        try {
+          const stored = await storeResult(item, task.url)
+          await markReady(item.id, stored.url, stored.bytes)
+        } catch (caught) {
+          const reason = `საცავში შენახვა ვერ მოხერხდა (${message(caught)}). ნაჩვენებია kie.ai-ის დროებითი ბმული: ჩამოტვირთე დღესვე.`
+          await markReady(item.id, task.url, 0)
+          await noteError(item.id, reason)
+          report.notes.push(`${label(item)}: ${reason}`)
+        }
         report.completed++
       } else if (task.state === "fail") {
         await failAttempt(item, task.reason, report)
@@ -118,9 +130,11 @@ export async function runTick(
 
   // 2. Start what is due: today's slots from 06:00 (or at once when run by
   //    hand from the planner), and yesterday's leftovers.
+  // Slots beyond today's count (left from an earlier, larger plan) are ignored.
   const due = (await listGeneratable(day)).filter(
     (item) =>
-      item.day < day || hour >= GENERATE_FROM_HOUR || options.startTodayNow
+      item.slot < slotCount(item.kind) &&
+      (item.day < day || hour >= GENERATE_FROM_HOUR || options.startTodayNow)
   )
   for (const item of due) {
     if (item.attempts >= MAX_ATTEMPTS) continue
@@ -155,7 +169,9 @@ export async function runTick(
     report.notes.push("Meta is not connected; publishing skipped.")
     return report
   }
-  const publishable = await listPublishable(day)
+  const publishable = (await listPublishable(day)).filter(
+    (item) => item.slot < slotCount(item.kind)
+  )
   for (const item of publishable.filter((i) => i.publishStatus === "publishing")) {
     if ((await advancePublish(meta, item)) === "published") report.published++
   }
