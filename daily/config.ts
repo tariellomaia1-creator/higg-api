@@ -56,3 +56,14 @@ export function storageLimitBytes(): number {
   const mb = Number(process.env.BLOB_LIMIT_MB)
   return (Number.isFinite(mb) && mb > 0 ? mb : 1000) * 1024 * 1024
 }
+
+/** Approximate charge per slot, shown before generating. Veo 3.1 Lite 720p
+    is a flat price; GPT Image 2.6 Sunburst is billed by tokens, so this is a
+    typical range for one 1K square image. https://kie.ai/veo-3-1 */
+export const ESTIMATED_CREDITS = {
+  video: { min: 30, max: 30 },
+  poster: { min: 10, max: 30 },
+} as const
+
+/** kie.ai sells credits at about $0.005 each. */
+export const USD_PER_CREDIT = 0.005

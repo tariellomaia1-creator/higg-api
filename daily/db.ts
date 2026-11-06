@@ -33,6 +33,8 @@ export type DailyItem = {
   igMediaId: string | null
   publishError: string | null
   publishedAt: string | null
+  /** kie.ai credits charged for this slot so far (all attempts). */
+  creditsUsed: number
 }
 
 type Sql = ReturnType<typeof neon>
@@ -91,6 +93,7 @@ async function createSchema(sql: Sql): Promise<void> {
       updated_at timestamptz NOT NULL DEFAULT now(),
       UNIQUE (day, kind, slot)
     )`
+  await sql`ALTER TABLE daily_items ADD COLUMN IF NOT EXISTS credits_used numeric NOT NULL DEFAULT 0`
 }
 
 function str(value: unknown): string | null {
@@ -132,6 +135,7 @@ function toItem(row: Record<string, unknown>): DailyItem {
       row.published_at instanceof Date
         ? row.published_at.toISOString()
         : str(row.published_at),
+    creditsUsed: num(row.credits_used),
   }
 }
 
@@ -271,6 +275,13 @@ export async function markKeyRejected(id: string, error: string): Promise<void> 
   const sql = await db()
   await sql`UPDATE daily_items SET error = ${error}, updated_at = now()
     WHERE id = ${id} AND status = 'pending'`
+}
+
+/** Adds kie.ai credits charged for one finished or failed task. */
+export async function addCreditsUsed(id: string, credits: number): Promise<void> {
+  if (!Number.isFinite(credits) || credits <= 0) return
+  const sql = await db()
+  await sql`UPDATE daily_items SET credits_used = credits_used + ${credits}, updated_at = now() WHERE id = ${id}`
 }
 
 /** Records why a slot is stuck without changing its state or attempts. */
