@@ -273,6 +273,12 @@ export async function markKeyRejected(id: string, error: string): Promise<void> 
     WHERE id = ${id} AND status = 'pending'`
 }
 
+/** Records why a slot is stuck without changing its state or attempts. */
+export async function noteError(id: string, error: string): Promise<void> {
+  const sql = await db()
+  await sql`UPDATE daily_items SET error = ${error}, updated_at = now() WHERE id = ${id}`
+}
+
 export async function markReady(
   id: string,
   resultUrl: string,
