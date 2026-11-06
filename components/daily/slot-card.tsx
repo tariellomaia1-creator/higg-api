@@ -250,7 +250,7 @@ export function SlotCard({ day, kind, slot, item, autoPublish, onChanged }: Prop
       {item?.error ? (
         <p className="rounded-lg bg-destructive/15 px-3 py-2 text-xs text-destructive">
           {item.error}
-          {item.status !== "failed" && item.attempts > 0 ? " ხელახლა ვცდი…" : ""}
+          {item.status === "pending" && item.attempts > 0 ? " ხელახლა ვცდი…" : ""}
         </p>
       ) : null}
       {item?.publishError ? (

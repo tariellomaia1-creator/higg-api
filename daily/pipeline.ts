@@ -22,6 +22,7 @@ import {
   markAttemptFailed,
   markReady,
   markSubmitFailed,
+  markKeyRejected,
   markSubmitted,
   updatePublish,
 } from "./db"
@@ -136,6 +137,15 @@ export async function runTick(
       await markSubmitted(item.id, queued.requestId)
       report.submitted++
     } catch (caught) {
+      // A rejected key is an account problem, not this slot's: keep the slot
+      // pending without spending its retry, and stop submitting until fixed.
+      if (caught instanceof PlatformError && caught.status === 401) {
+        const reason =
+          "Higgsfield-მა API key არ მიიღო. Vercel-ში HF_API_KEY უნდა იყოს სრული გასაღები ფორმატით key-id:key-secret (open.higgsfield.ai → API keys), შემდეგ Redeploy."
+        for (const pending of due) await markKeyRejected(pending.id, reason)
+        report.notes.push(reason)
+        break
+      }
       const final = item.attempts + 1 >= MAX_ATTEMPTS
       await markSubmitFailed(item.id, submitError(caught, path), final)
       if (final) report.failed++
