@@ -206,8 +206,10 @@ export async function pollInFlight(
         }
       } else if (task.state === "fail") {
         await addCreditsUsed(item.id, task.credits)
-        const final = item.attempts >= MAX_ATTEMPTS
-        await markAttemptFailed(item.id, task.reason, final)
+        // A safety refusal fails the same way every time, so it is not retried.
+        const blocked = explainBlocked(item, task.reason)
+        const final = blocked !== null || item.attempts >= MAX_ATTEMPTS
+        await markAttemptFailed(item.id, blocked ?? task.reason, final)
         if (final) report.failed++
       }
     } catch (caught) {
@@ -221,6 +223,16 @@ export async function pollInFlight(
     }
   }
   return report
+}
+
+/** kie.ai passes on the model's safety refusals in English; say in Georgian
+    what to change. Returns null for other failures (those are retried). */
+function explainBlocked(item: DailyItem, reason: string): string | null {
+  if (/unsafe image upload/i.test(reason))
+    return `Google-ის უსაფრთხოების ფილტრმა start image დაბლოკა („${reason}“). ხშირი მიზეზები: არასრულწლოვნად აღქმული სახე, ცნობილი ადამიანი ან ზედმეტად რეალისტური ფოტო, გამომწვევი ჩაცმულობა. ატვირთე სხვა ფოტო (აშკარად ზრდასრული პერსონაჟი, ან ილუსტრაციის/3D სტილი) და დააჭირე „თავიდან გენერაცია“.`
+  if (/flagged|content polic|violat/i.test(reason))
+    return `${item.kind === "video" ? "ვიდეოს" : "პოსტერის"} პრომტი უსაფრთხოების ფილტრმა დაბლოკა („${reason}“). გადააკეთე პრომტი (ბრენდები, ცნობილი სახეები, ძალადობა, მგრძნობიარე სიტყვები) და დააჭირე „თავიდან გენერაცია“.`
+  return null
 }
 
 async function storeResult(
