@@ -224,9 +224,10 @@ export async function retryPublish(id: unknown): Promise<Result<null>> {
   })
 }
 
-/** Runs one scheduler pass now, the same one the cron calls. */
+/** Runs one scheduler pass now. Unlike the cron, it starts today's planned
+    slots immediately instead of waiting for 06:00. */
 export async function runSchedulerNow(): Promise<Result<TickReport>> {
-  return guard(() => runTick())
+  return guard(() => runTick(new Date(), { startTodayNow: true }))
 }
 
 function blobUrls(items: DailyItem[]): string[] {

@@ -73,7 +73,10 @@ const FAILED_STATES: Record<string, string> = {
 
 /** One scheduler pass: finish running generations, start due ones, then
     advance publishing. Safe to call as often as every few minutes. */
-export async function runTick(now = new Date()): Promise<TickReport> {
+export async function runTick(
+  now = new Date(),
+  options: { startTodayNow?: boolean } = {}
+): Promise<TickReport> {
   const { day, hour } = tbilisiNow(now)
   const report: TickReport = {
     day,
@@ -111,9 +114,11 @@ export async function runTick(now = new Date()): Promise<TickReport> {
     }
   }
 
-  // 2. Start what is due: today's slots from 06:00, and yesterday's leftovers.
+  // 2. Start what is due: today's slots from 06:00 (or at once when run by
+  //    hand from the planner), and yesterday's leftovers.
   const due = (await listGeneratable(day)).filter(
-    (item) => item.day < day || hour >= GENERATE_FROM_HOUR
+    (item) =>
+      item.day < day || hour >= GENERATE_FROM_HOUR || options.startTodayNow
   )
   for (const item of due) {
     if (item.attempts >= MAX_ATTEMPTS) continue
