@@ -36,7 +36,7 @@ export type Result<T> = { ok: true; data: T } | { ok: false; error: string }
 export type SetupStatus = {
   database: boolean
   blob: boolean
-  higgsfield: boolean
+  generator: boolean
   facebook: boolean
   instagram: boolean
   scheduler: boolean
@@ -102,7 +102,7 @@ export async function getSetupStatus(): Promise<Result<SetupStatus>> {
     return {
       database: Boolean(process.env.DATABASE_URL ?? process.env.POSTGRES_URL),
       blob: blobConfigured(),
-      higgsfield: Boolean(process.env.HF_API_KEY?.trim()),
+      generator: Boolean(process.env.KIE_API_KEY?.trim()),
       facebook: Boolean(meta),
       instagram: Boolean(meta?.igUserId),
       scheduler: Boolean(process.env.CRON_SECRET?.trim()),
