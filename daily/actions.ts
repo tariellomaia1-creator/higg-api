@@ -26,6 +26,7 @@ import {
   upsertPlan,
 } from "./db"
 import type { DailyItem } from "./db"
+import { getKieBalance, kieApiKey } from "./kie"
 import { metaConfig } from "./meta"
 import { runTick } from "./pipeline"
 import type { TickReport } from "./pipeline"
@@ -107,6 +108,15 @@ export async function getSetupStatus(): Promise<Result<SetupStatus>> {
       instagram: Boolean(meta?.igUserId),
       scheduler: Boolean(process.env.CRON_SECRET?.trim()),
     }
+  })
+}
+
+/** Live kie.ai balance for the account behind KIE_API_KEY. */
+export async function getCreditBalance(): Promise<Result<number>> {
+  return guard(async () => {
+    const key = kieApiKey()
+    if (!key) throw new Error("KIE_API_KEY is not set.")
+    return getKieBalance(key)
   })
 }
 

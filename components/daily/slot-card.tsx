@@ -12,7 +12,7 @@ import {
 import { useId, useRef, useState } from "react"
 
 import type { ItemKind } from "@/daily/config"
-import { formatHour, publishHour } from "@/daily/config"
+import { ESTIMATED_CREDITS, formatHour, publishHour } from "@/daily/config"
 import {
   clearPlanItem,
   retryGeneration,
@@ -184,6 +184,8 @@ export function SlotCard({ day, kind, slot, item, autoPublish, onChanged }: Prop
           </a>
         </div>
       ) : null}
+
+      <CreditLine kind={kind} item={item} />
 
       {kind === "video" ? (
         <div className="flex items-center gap-3">
@@ -357,4 +359,23 @@ function downloadHref(url: string): string {
   } catch {
     return url
   }
+}
+
+function CreditLine({ kind, item }: { kind: ItemKind; item: DailyItem | undefined }) {
+  const estimate = ESTIMATED_CREDITS[kind]
+  const range =
+    estimate.min === estimate.max ? `${estimate.min}` : `~${estimate.min}–${estimate.max}`
+  const spent = item?.creditsUsed ?? 0
+  const finished = item?.status === "ready" || item?.status === "failed"
+  return (
+    <p className="text-xs text-muted-foreground">
+      {finished || spent > 0
+        ? `დაიხარჯა: ${formatCredits(spent)} კრედიტი`
+        : `სავარაუდო ხარჯი: ${range} კრედიტი`}
+    </p>
+  )
+}
+
+function formatCredits(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1)
 }

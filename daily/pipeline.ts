@@ -20,12 +20,14 @@ import {
   markKeyRejected,
   markSubmitted,
   noteError,
+  addCreditsUsed,
   updatePublish,
 } from "./db"
 import type { DailyItem, PublishStatus } from "./db"
 import {
   KieError,
   createKieTask,
+  getKieBalance,
   getKieTask,
   gptSunburstTask,
   kieApiKey,
@@ -103,6 +105,7 @@ export async function runTick(
   for (const item of await listGenerating()) {
     try {
       const task = await getKieTask(apiKey, item.requestId!)
+      if (task.state !== "pending") await addCreditsUsed(item.id, task.credits)
       if (task.state === "success") {
         if (!task.url) throw new Error("Completed without a result URL.")
         // The result is paid for, so it is never regenerated. If copying it
@@ -148,7 +151,10 @@ export async function runTick(
       report.submitted++
     } catch (caught) {
       if (caught instanceof KieError && caught.code in ACCOUNT_ERRORS) {
-        const reason = ACCOUNT_ERRORS[caught.code]!
+        const balance = await getKieBalance(apiKey).catch(() => null)
+        const reason = `${ACCOUNT_ERRORS[caught.code]!} kie.ai-ის პასუხი: „${caught.message}“.${
+          balance === null ? "" : ` ამ გასაღების ანგარიშზე ბალანსი: ${balance} კრედიტი.`
+        }`
         for (const pending of due) await markKeyRejected(pending.id, reason)
         report.notes.push(reason)
         break

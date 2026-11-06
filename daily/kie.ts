@@ -18,8 +18,8 @@ export class KieError extends Error {
 
 export type KieTask =
   | { state: "pending" }
-  | { state: "success"; url: string | null }
-  | { state: "fail"; reason: string }
+  | { state: "success"; url: string | null; credits: number }
+  | { state: "fail"; reason: string; credits: number }
 
 export function kieApiKey(): string | null {
   const key = process.env.KIE_API_KEY?.trim()
@@ -111,15 +111,38 @@ export async function getKieTask(
     `/api/v1/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`
   )
   const state = data.state
-  if (state === "success") return { state: "success", url: firstResultUrl(data) }
+  const credits = Number(data.creditsConsumed)
+  const charged = Number.isFinite(credits) && credits > 0 ? credits : 0
+  if (state === "success")
+    return { state: "success", url: firstResultUrl(data), credits: charged }
   if (state === "fail") {
     const reason =
       typeof data.failMsg === "string" && data.failMsg
         ? data.failMsg
         : `Generation failed${data.failCode ? ` (${String(data.failCode)})` : ""}.`
-    return { state: "fail", reason }
+    return { state: "fail", reason, credits: charged }
   }
   return { state: "pending" }
+}
+
+/** Remaining credits on the account that owns this key. */
+export async function getKieBalance(apiKey: string): Promise<number> {
+  const response = await fetch(`${BASE_URL}/api/v1/chat/credit`, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+    cache: "no-store",
+  })
+  const payload = asRecord(await response.json().catch(() => null))
+  const code = Number(payload.code ?? response.status)
+  if (!response.ok || code !== 200)
+    throw new KieError(
+      code || response.status,
+      typeof payload.msg === "string" && payload.msg
+        ? payload.msg
+        : `kie.ai balance request failed (${code || response.status})`
+    )
+  const balance = Number(payload.data)
+  if (!Number.isFinite(balance)) throw new KieError(502, "kie.ai returned no balance.")
+  return balance
 }
 
 function firstResultUrl(data: Record<string, unknown>): string | null {

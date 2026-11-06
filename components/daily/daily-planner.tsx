@@ -12,7 +12,9 @@ import Link from "next/link"
 import { useCallback, useEffect, useState } from "react"
 
 import {
+  ESTIMATED_CREDITS,
   POSTERS_PER_DAY,
+  USD_PER_CREDIT,
   VIDEOS_PER_DAY,
   addDays,
   isDay,
@@ -20,6 +22,7 @@ import {
 import type { ItemKind } from "@/daily/config"
 import {
   deleteDay,
+  getCreditBalance,
   getDayView,
   getSetupStatus,
   logout,
@@ -60,6 +63,14 @@ export function DailyPlanner() {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
+  const [balance, setBalance] = useState<
+    { value: number } | { error: string } | null
+  >(null)
+
+  const refreshBalance = useCallback(async () => {
+    const result = await getCreditBalance()
+    setBalance(result.ok ? { value: result.data } : { error: result.error })
+  }, [])
 
   const apply = useCallback((result: Result<DayView>) => {
     if (!result.ok) {
@@ -84,6 +95,9 @@ export function DailyPlanner() {
     void getSetupStatus().then((result) => {
       if (live && result.ok) setSetup(result.data)
     })
+    void getCreditBalance().then((result) => {
+      if (live) setBalance(result.ok ? { value: result.data } : { error: result.error })
+    })
     return () => {
       live = false
     }
@@ -95,9 +109,12 @@ export function DailyPlanner() {
   )
   useEffect(() => {
     if (!day) return
-    const timer = window.setInterval(() => void load(day), active ? 20_000 : 60_000)
+    const timer = window.setInterval(() => {
+      void load(day)
+      void refreshBalance()
+    }, active ? 20_000 : 60_000)
     return () => window.clearInterval(timer)
-  }, [active, day, load])
+  }, [active, day, load, refreshBalance])
 
   async function runNow() {
     setRunning(true)
@@ -114,6 +131,7 @@ export function DailyPlanner() {
         (report.notes.length ? ` ${report.notes.join(" ")}` : "")
     )
     await load(day)
+    await refreshBalance()
   }
 
   async function removeDay() {
@@ -167,6 +185,8 @@ export function DailyPlanner() {
           </form>
         </div>
       </div>
+
+      <CreditPanel balance={balance} view={view} onRefresh={() => void refreshBalance()} />
 
       {missing.length ? (
         <section className="rounded-2xl border border-border bg-card p-4 text-sm">
@@ -334,6 +354,63 @@ function DaySection({ title, children }: { title: string; children: React.ReactN
     <section className="flex flex-col gap-3">
       <h2 className="font-heading text-lg font-semibold">{title}</h2>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{children}</div>
+    </section>
+  )
+}
+
+function CreditPanel({
+  balance,
+  view,
+  onRefresh,
+}: {
+  balance: { value: number } | { error: string } | null
+  view: DayView | null
+  onRefresh: () => void
+}) {
+  const planMin =
+    VIDEOS_PER_DAY * ESTIMATED_CREDITS.video.min + POSTERS_PER_DAY * ESTIMATED_CREDITS.poster.min
+  const planMax =
+    VIDEOS_PER_DAY * ESTIMATED_CREDITS.video.max + POSTERS_PER_DAY * ESTIMATED_CREDITS.poster.max
+  const spentToday = view?.items.reduce((sum, item) => sum + item.creditsUsed, 0) ?? 0
+  const low = balance !== null && "value" in balance && balance.value < planMax
+  return (
+    <section
+      className={cn(
+        "flex flex-wrap items-center gap-x-6 gap-y-2 rounded-2xl border p-4 text-sm",
+        low ? "border-destructive/50 bg-destructive/10" : "border-border bg-card"
+      )}
+    >
+      <div>
+        <p className="text-xs text-muted-foreground">kie.ai ბალანსი</p>
+        <p className="font-heading text-lg font-semibold">
+          {balance === null
+            ? "…"
+            : "value" in balance
+              ? `${Math.round(balance.value * 10) / 10} კრედიტი (≈ $${(balance.value * USD_PER_CREDIT).toFixed(2)})`
+              : "ვერ წავიკითხე"}
+        </p>
+        {balance !== null && "error" in balance ? (
+          <p className="text-xs text-destructive">{balance.error}</p>
+        ) : null}
+      </div>
+      <div>
+        <p className="text-xs text-muted-foreground">დღის გეგმა (სავარაუდო)</p>
+        <p className="font-medium">
+          {planMin === planMax ? planMin : `${planMin}–${planMax}`} კრედიტი
+        </p>
+      </div>
+      <div>
+        <p className="text-xs text-muted-foreground">ამ დღეს დაიხარჯა</p>
+        <p className="font-medium">{Math.round(spentToday * 10) / 10} კრედიტი</p>
+      </div>
+      {low ? (
+        <p className="basis-full text-xs font-medium text-destructive">
+          ბალანსი დღის გეგმას არ ყოფნის. შეავსე kie.ai-ზე.
+        </p>
+      ) : null}
+      <Button variant="ghost" size="sm" className="ml-auto" onClick={onRefresh}>
+        განახლება
+      </Button>
     </section>
   )
 }
