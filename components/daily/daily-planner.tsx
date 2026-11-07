@@ -24,6 +24,7 @@ import {
 import type { ItemKind } from "@/daily/config"
 import {
   deleteDay,
+  fillMissingCaptions,
   getCaptionFooter,
   getCreditBalance,
   getDayView,
@@ -236,7 +237,11 @@ export function DailyPlanner() {
 
       <CreditPanel balance={balance} view={view} onRefresh={() => void refreshBalance()} />
 
-      <CaptionFooterPanel value={captionFooter} onSaved={setCaptionFooter} />
+      <CaptionFooterPanel
+        value={captionFooter}
+        onSaved={setCaptionFooter}
+        onFilled={() => void load(day)}
+      />
 
       {toast ? (
         <div
@@ -490,10 +495,23 @@ function CreditPanel({
 function CaptionFooterPanel({
   value,
   onSaved,
+  onFilled,
 }: {
   value: string
   onSaved: (value: string) => void
+  onFilled: () => void
 }) {
+  const [fillState, setFillState] = useState<string | null>(null)
+  async function fillAll() {
+    setFillState("…")
+    const result = await fillMissingCaptions()
+    if (result.ok) {
+      setFillState(
+        result.data ? `შეივსო ${result.data} caption ✓` : "ცარიელი caption აღარ დარჩა ✓"
+      )
+      onFilled()
+    } else setFillState(result.error)
+  }
   const [draft, setDraft] = useState<string | null>(null)
   const [state, setState] = useState<"idle" | "saving" | "saved" | string>("idle")
   const text = draft ?? value
@@ -504,6 +522,7 @@ function CaptionFooterPanel({
       onSaved(result.data)
       setDraft(null)
       setState("saved")
+      await fillAll()
     } else setState(result.error)
   }
   return (
@@ -518,7 +537,7 @@ function CaptionFooterPanel({
       <div className="mt-3 flex flex-col gap-2">
         <p className="text-xs text-muted-foreground">
           caption = პრომტში ბრჭყალებით ჩაწერილი ქართული ტექსტი + ეს ნაწილი. ცარიელ caption-ს შენახვისას ავტომატურად
-          ვავსებ; შენ მიერ დაწერილს არ ვცვლი.
+          ვავსებ; შენ მიერ დაწერილს არ ვცვლი. უფასოა, კრედიტი არ იხარჯება.
         </p>
         <textarea
           value={text}
@@ -535,7 +554,13 @@ function CaptionFooterPanel({
           <Button onClick={save} disabled={state === "saving" || draft === null}>
             შენახვა
           </Button>
+          <Button variant="secondary" onClick={() => void fillAll()} disabled={fillState === "…"}>
+            ცარიელი caption-ების შევსება
+          </Button>
           {state === "saved" ? <span className="text-xs text-primary">შენახულია ✓</span> : null}
+          {fillState && fillState !== "…" ? (
+            <span className="text-xs text-muted-foreground">{fillState}</span>
+          ) : null}
           {state !== "idle" && state !== "saving" && state !== "saved" ? (
             <span className="text-xs text-destructive">{state}</span>
           ) : null}

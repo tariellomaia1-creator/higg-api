@@ -19,7 +19,9 @@ import {
   clearSlot,
   deleteDayItems,
   getItem,
+  fillCaption,
   getSetting,
+  listWithoutCaption,
   setSetting,
   listDay,
   listDaysWithContent,
@@ -188,6 +190,20 @@ export async function saveCaptionFooter(value: unknown): Promise<Result<string>>
     const footer = typeof value === "string" ? value.trim().slice(0, 1000) : ""
     await setSetting(CAPTION_FOOTER_KEY, footer)
     return footer
+  })
+}
+
+/** Fills every empty caption of slots not yet posted from their prompt.
+    Free: plain text, no AI call. Returns how many were filled. */
+export async function fillMissingCaptions(): Promise<Result<number>> {
+  return guard(async () => {
+    const footer = (await getSetting(CAPTION_FOOTER_KEY)) ?? ""
+    let filled = 0
+    for (const item of await listWithoutCaption()) {
+      const caption = buildCaption(item.prompt, footer)
+      if (caption && (await fillCaption(item.id, caption))) filled++
+    }
+    return filled
   })
 }
 
