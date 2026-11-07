@@ -43,14 +43,19 @@ export function veoLiteTask(prompt: string, startImageUrl: string) {
   }
 }
 
-/** GPT Image 2.6 Sunburst, square, 1K, JPEG (what Instagram accepts). */
-export function gptSunburstTask(prompt: string) {
+/** GPT Image 2.6 Sunburst, square, JPEG (what Instagram accepts), at the
+    planner's chosen quality and resolution. */
+export function gptSunburstTask(
+  prompt: string,
+  options: { quality: string; resolution: string }
+) {
   return {
     model: "gpt-image-2-6/sunburst-text-to-image",
     input: {
       prompt,
       aspect_ratio: "1:1",
-      resolution: "1K",
+      resolution: options.resolution,
+      quality: options.quality,
       output_format: "jpeg",
     },
   }

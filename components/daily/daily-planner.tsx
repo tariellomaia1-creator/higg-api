@@ -14,18 +14,22 @@ import Link from "next/link"
 import { useCallback, useEffect, useRef, useState } from "react"
 
 import {
+  DEFAULT_POSTER_SETTINGS,
   ESTIMATED_CREDITS,
+  POSTER_QUALITIES,
+  POSTER_RESOLUTIONS,
   POSTERS_PER_DAY,
   USD_PER_CREDIT,
   VIDEOS_PER_DAY,
   addDays,
   isDay,
 } from "@/daily/config"
-import type { ItemKind } from "@/daily/config"
+import type { ItemKind, PosterSettings } from "@/daily/config"
 import {
   deleteDay,
   fillMissingCaptions,
   getCaptionFooter,
+  getPosterSettings,
   getCreditBalance,
   getDayView,
   getSetupStatus,
@@ -33,6 +37,7 @@ import {
   refreshGenerating,
   runSchedulerNow,
   saveCaptionFooter,
+  savePosterSettings,
 } from "@/daily/actions"
 import type { DayView, Result, SetupStatus } from "@/daily/actions"
 
@@ -241,6 +246,8 @@ export function DailyPlanner() {
 
       <CreditPanel balance={balance} view={view} onRefresh={() => void refreshBalance()} />
 
+      <PosterQualityPanel />
+
       <CaptionFooterPanel
         value={captionFooter}
         onSaved={setCaptionFooter}
@@ -389,7 +396,7 @@ export function DailyPlanner() {
               />
             ))}
           </DaySection>
-          <DaySection title="პოსტერები · GPT Image 2.6 Sunburst · 1:1 · 1K">
+          <DaySection title="პოსტერები · GPT Image 2.6 Sunburst · 1:1">
             {Array.from({ length: POSTERS_PER_DAY }, (_, slot) => (
               <SlotCard
                 key={slotKey(view, "poster", slot)}
@@ -571,5 +578,81 @@ function CaptionFooterPanel({
         </div>
       </div>
     </details>
+  )
+}
+
+const QUALITY_LABEL: Record<string, string> = {
+  medium: "medium (იაფი)",
+  high: "high",
+  xhigh: "xhigh",
+  max: "max (საუკეთესო ტექსტი)",
+}
+
+function PosterQualityPanel() {
+  const [settings, setSettings] = useState<PosterSettings>(DEFAULT_POSTER_SETTINGS)
+  const [state, setState] = useState<string | null>(null)
+
+  useEffect(() => {
+    let live = true
+    void getPosterSettings().then((result) => {
+      if (live && result.ok) setSettings(result.data)
+    })
+    return () => {
+      live = false
+    }
+  }, [])
+
+  async function change(next: PosterSettings) {
+    setSettings(next)
+    setState("…")
+    const result = await savePosterSettings(next)
+    setState(result.ok ? "შენახულია ✓" : result.error)
+  }
+
+  return (
+    <section className="flex flex-wrap items-end gap-4 rounded-2xl border border-border bg-card p-4 text-sm">
+      <div className="min-w-0 basis-full sm:basis-auto sm:flex-1">
+        <p className="font-medium">პოსტერის ხარისხი (GPT Image 2.6 Sunburst)</p>
+        <p className="text-xs text-muted-foreground">
+          max ქართულ ტექსტს ყველაზე ზუსტად წერს, მაგრამ მეტი კრედიტი ჯდება. 2K ტექსტს უფრო მკაფიოს ხდის, ფასი კიდევ იზრდება.
+          ზუსტ ხარჯს ბარათზე „დაიხარჯა“ აჩვენებს.
+        </p>
+      </div>
+      <label className="flex flex-col gap-1">
+        <span className="text-xs text-muted-foreground">ხარისხი</span>
+        <select
+          id="poster-quality"
+          value={settings.quality}
+          onChange={(event) =>
+            void change({ ...settings, quality: event.target.value as PosterSettings["quality"] })
+          }
+          className="h-9 rounded-lg border border-input bg-input/30 px-2 text-sm"
+        >
+          {POSTER_QUALITIES.map((q) => (
+            <option key={q} value={q}>
+              {QUALITY_LABEL[q] ?? q}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className="text-xs text-muted-foreground">რეზოლუცია</span>
+        <select
+          id="poster-resolution"
+          value={settings.resolution}
+          onChange={(event) =>
+            void change({ ...settings, resolution: event.target.value as PosterSettings["resolution"] })
+          }
+          className="h-9 rounded-lg border border-input bg-input/30 px-2 text-sm"
+        >
+          {POSTER_RESOLUTIONS.map((r) => (
+            <option key={r} value={r}>
+              {r === "1K" ? "1K (1024×1024)" : "2K (2048×2048)"}
+            </option>
+          ))}
+        </select>
+      </label>
+      {state && state !== "…" ? <span className="text-xs text-muted-foreground">{state}</span> : null}
+    </section>
   )
 }

@@ -13,7 +13,15 @@ import {
   sessionToken,
   sitePassword,
 } from "./auth"
-import { addDays, isDay, slotCount, storageLimitBytes, tbilisiNow } from "./config"
+import {
+  addDays,
+  isDay,
+  parsePosterSettings,
+  slotCount,
+  storageLimitBytes,
+  tbilisiNow,
+} from "./config"
+import type { PosterSettings } from "./config"
 import type { ItemKind } from "./config"
 import {
   clearSlot,
@@ -183,6 +191,27 @@ export async function getTakenSlots(
     const span = Math.min(Math.max(Number(days) || 1, 1), 400)
     const items = await listRange(from, addDays(from, span - 1))
     return items.map((item) => ({ day: item.day, kind: item.kind, slot: item.slot }))
+  })
+}
+
+const POSTER_SETTINGS_KEY = "poster_settings"
+
+export async function getPosterSettings(): Promise<Result<PosterSettings>> {
+  return guard(async () => {
+    const raw = await getSetting(POSTER_SETTINGS_KEY)
+    try {
+      return parsePosterSettings(raw ? JSON.parse(raw) : null)
+    } catch {
+      return parsePosterSettings(null)
+    }
+  })
+}
+
+export async function savePosterSettings(value: unknown): Promise<Result<PosterSettings>> {
+  return guard(async () => {
+    const settings = parsePosterSettings(value)
+    await setSetting(POSTER_SETTINGS_KEY, JSON.stringify(settings))
+    return settings
   })
 }
 
