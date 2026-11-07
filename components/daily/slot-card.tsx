@@ -54,12 +54,23 @@ type Props = {
   item: DailyItem | undefined
   /** Meta is connected: show the posting hour and publish status. */
   autoPublish: boolean
+  /** Posts go out by themselves at the slot's hour. */
+  scheduledPublish: boolean
   /** Saved caption footer (link, call to action, hashtags). */
   captionFooter: string
   onChanged: () => void
 }
 
-export function SlotCard({ day, kind, slot, item, autoPublish, captionFooter, onChanged }: Props) {
+export function SlotCard({
+  day,
+  kind,
+  slot,
+  item,
+  autoPublish,
+  scheduledPublish,
+  captionFooter,
+  onChanged,
+}: Props) {
   const fieldId = useId()
   const fileInput = useRef<HTMLInputElement>(null)
   const [prompt, setPrompt] = useState(item?.prompt ?? "")
@@ -184,10 +195,14 @@ export function SlotCard({ day, kind, slot, item, autoPublish, captionFooter, on
         <div>
           <h3 className="font-heading text-base font-semibold">{title}</h3>
           {autoPublish ? (
-            <p className="text-xs text-muted-foreground">გამოქვეყნება {hour}-ზე</p>
+            <p className="text-xs text-muted-foreground">
+              {scheduledPublish ? `გამოქვეყნება ${hour}-ზე` : "გამოქვეყნება ხელით"}
+            </p>
           ) : null}
         </div>
-        {item ? <StatusBadge item={item} autoPublish={autoPublish} /> : null}
+        {item ? (
+          <StatusBadge item={item} autoPublish={autoPublish} scheduledPublish={scheduledPublish} />
+        ) : null}
       </header>
 
       {item?.status === "ready" && item.resultUrl ? (
@@ -350,12 +365,18 @@ export function SlotCard({ day, kind, slot, item, autoPublish, captionFooter, on
 function StatusBadge({
   item,
   autoPublish,
+  scheduledPublish,
 }: {
   item: DailyItem
   autoPublish: boolean
+  scheduledPublish: boolean
 }) {
   const showPublish = autoPublish && item.status === "ready"
-  const text = showPublish ? PUBLISH_LABEL[item.publishStatus] : GEN_LABEL[item.status]
+  const text = showPublish
+    ? item.publishStatus === "waiting" && !scheduledPublish
+      ? "მზადაა, არ გამოქვეყნებულა"
+      : PUBLISH_LABEL[item.publishStatus]
+    : GEN_LABEL[item.status]
   const tone =
     item.status === "failed" ||
     (showPublish &&
