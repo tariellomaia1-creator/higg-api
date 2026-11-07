@@ -62,8 +62,25 @@ export function storageLimitBytes(): number {
     typical range for one 1K square image. https://kie.ai/veo-3-1 */
 export const ESTIMATED_CREDITS = {
   video: { min: 30, max: 30 },
-  poster: { min: 10, max: 30 },
+  poster: { min: 10, max: 60 },
 } as const
 
 /** kie.ai sells credits at about $0.005 each. */
 export const USD_PER_CREDIT = 0.005
+
+/** GPT Image 2.6 Sunburst rendering options on kie.ai. Higher quality draws
+    text (Georgian letters included) more carefully and costs more tokens. */
+export const POSTER_QUALITIES = ["medium", "high", "xhigh", "max"] as const
+export type PosterQuality = (typeof POSTER_QUALITIES)[number]
+export const POSTER_RESOLUTIONS = ["1K", "2K"] as const
+export type PosterResolution = (typeof POSTER_RESOLUTIONS)[number]
+export type PosterSettings = { quality: PosterQuality; resolution: PosterResolution }
+export const DEFAULT_POSTER_SETTINGS: PosterSettings = { quality: "max", resolution: "1K" }
+
+export function parsePosterSettings(value: unknown): PosterSettings {
+  const data = (value && typeof value === "object" ? value : {}) as Record<string, unknown>
+  const quality = POSTER_QUALITIES.find((q) => q === data.quality) ?? DEFAULT_POSTER_SETTINGS.quality
+  const resolution =
+    POSTER_RESOLUTIONS.find((r) => r === data.resolution) ?? DEFAULT_POSTER_SETTINGS.resolution
+  return { quality, resolution }
+}

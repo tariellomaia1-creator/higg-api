@@ -9,6 +9,7 @@ import sharp from "sharp"
 import {
   GENERATE_FROM_HOUR,
   MAX_ATTEMPTS,
+  parsePosterSettings,
   publishHour,
   slotCount,
   tbilisiNow,
@@ -127,7 +128,7 @@ export async function runTick(
       const task =
         item.kind === "video"
           ? veoLiteTask(item.prompt, await startImageForKie(apiKey, item))
-          : gptSunburstTask(item.prompt)
+          : gptSunburstTask(item.prompt, await posterSettings())
       const taskId = await createKieTask(apiKey, task)
       await markSubmitted(item.id, taskId)
       report.submitted++
@@ -180,6 +181,15 @@ export async function runTick(
 
 /** Checks every running kie.ai task once and stores finished results. Never
     submits anything, so the planner can call it while it is open. */
+async function posterSettings() {
+  const raw = await getSetting("poster_settings")
+  try {
+    return parsePosterSettings(raw ? JSON.parse(raw) : null)
+  } catch {
+    return parsePosterSettings(null)
+  }
+}
+
 /** Starts one planned slot now, whatever its day. */
 export async function generateItemNow(item: DailyItem): Promise<void> {
   if (item.status !== "pending") throw new Error("ეს სლოტი უკვე გენერირდება ან მზადაა.")
@@ -190,7 +200,7 @@ export async function generateItemNow(item: DailyItem): Promise<void> {
   const task =
     item.kind === "video"
       ? veoLiteTask(item.prompt, await startImageForKie(apiKey, item))
-      : gptSunburstTask(item.prompt)
+      : gptSunburstTask(item.prompt, await posterSettings())
   try {
     const taskId = await createKieTask(apiKey, task)
     await markSubmitted(item.id, taskId)
