@@ -16,6 +16,7 @@ import {
   listGeneratable,
   listGenerating,
   listPublishable,
+  listPublishing,
   markAttemptFailed,
   markReady,
   markSubmitFailed,
@@ -177,6 +178,28 @@ export async function runTick(
 
 /** Checks every running kie.ai task once and stores finished results. Never
     submits anything, so the planner can call it while it is open. */
+/** Posts one finished slot right away, ignoring its scheduled hour. */
+export async function publishItemNow(item: DailyItem): Promise<PublishStatus> {
+  const meta = metaConfig()
+  if (!meta) throw new Error("Meta is not connected (META_PAGE_ID / META_PAGE_ACCESS_TOKEN).")
+  if (item.status !== "ready" || !item.resultUrl)
+    throw new Error("ჯერ მასალა უნდა დამზადდეს.")
+  if (item.publishStatus === "published") throw new Error("უკვე გამოქვეყნებულია.")
+  if (item.publishStatus === "publishing") throw new Error("უკვე ქვეყნდება.")
+  return advancePublish(meta, { ...item, publishStatus: "waiting" })
+}
+
+/** Moves posts that are still processing (Instagram Reels) forward. Called
+    by the open planner so their status updates without the scheduler. */
+export async function continuePublishing(): Promise<number> {
+  const meta = metaConfig()
+  if (!meta) return 0
+  let published = 0
+  for (const item of await listPublishing())
+    if ((await advancePublish(meta, item)) === "published") published++
+  return published
+}
+
 export async function pollInFlight(
   apiKey = requireKieKey()
 ): Promise<Pick<TickReport, "completed" | "failed" | "notes">> {

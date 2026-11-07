@@ -259,6 +259,12 @@ export async function listPublishable(day: string): Promise<DailyItem[]> {
     ORDER BY slot, kind DESC`)
 }
 
+/** Posts started on Meta that are still being processed, any day. */
+export async function listPublishing(): Promise<DailyItem[]> {
+  const sql = await db()
+  return rows(await sql`SELECT * FROM daily_items WHERE status = 'ready' AND publish_status = 'publishing'`)
+}
+
 export async function markSubmitted(
   id: string,
   requestId: string
