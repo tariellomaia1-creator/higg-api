@@ -70,6 +70,7 @@ async function db(): Promise<Sql> {
 }
 
 async function createSchema(sql: Sql): Promise<void> {
+  await sql`CREATE TABLE IF NOT EXISTS daily_settings (key text PRIMARY KEY, value text NOT NULL)`
   await sql`
     CREATE TABLE IF NOT EXISTS daily_items (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -398,4 +399,17 @@ export async function listFinished(limit = 300): Promise<DailyItem[]> {
   return rows(await sql`
     SELECT * FROM daily_items WHERE status = 'ready' AND result_url IS NOT NULL
     ORDER BY day DESC, COALESCE(completed_at, updated_at) DESC LIMIT ${limit}`)
+}
+
+export async function getSetting(key: string): Promise<string | null> {
+  const sql = await db()
+  const result = await sql`SELECT value FROM daily_settings WHERE key = ${key}`
+  const row = Array.isArray(result) ? (result[0] as Record<string, unknown> | undefined) : undefined
+  return typeof row?.value === "string" ? row.value : null
+}
+
+export async function setSetting(key: string, value: string): Promise<void> {
+  const sql = await db()
+  await sql`INSERT INTO daily_settings (key, value) VALUES (${key}, ${value})
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`
 }
