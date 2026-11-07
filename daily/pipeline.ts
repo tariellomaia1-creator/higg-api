@@ -180,6 +180,27 @@ export async function runTick(
 
 /** Checks every running kie.ai task once and stores finished results. Never
     submits anything, so the planner can call it while it is open. */
+/** Starts one planned slot now, whatever its day. */
+export async function generateItemNow(item: DailyItem): Promise<void> {
+  if (item.status !== "pending") throw new Error("ეს სლოტი უკვე გენერირდება ან მზადაა.")
+  if (!item.prompt) throw new Error("ჯერ პრომტი დაწერე და შეინახე.")
+  if (item.kind === "video" && !item.startImageUrl)
+    throw new Error("ჯერ start image ატვირთე და შეინახე.")
+  const apiKey = requireKieKey()
+  const task =
+    item.kind === "video"
+      ? veoLiteTask(item.prompt, await startImageForKie(apiKey, item))
+      : gptSunburstTask(item.prompt)
+  try {
+    const taskId = await createKieTask(apiKey, task)
+    await markSubmitted(item.id, taskId)
+  } catch (caught) {
+    if (caught instanceof KieError && caught.code in ACCOUNT_ERRORS)
+      throw new Error(`${ACCOUNT_ERRORS[caught.code]!} („${caught.message}“)`)
+    throw caught
+  }
+}
+
 /** Posts one finished slot right away, ignoring its scheduled hour. */
 export async function publishItemNow(item: DailyItem): Promise<PublishStatus> {
   const meta = metaConfig()
