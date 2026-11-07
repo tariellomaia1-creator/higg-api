@@ -332,7 +332,10 @@ async function advancePublish(
   // Old slots saved before auto captions get one now.
   const caption =
     item.caption ||
-    buildCaption(item.prompt, (await getSetting("caption_footer")) ?? "")
+    buildCaption(
+      item.prompt,
+      (await getSetting("caption_footer")) ?? "სცადე უფასოდ 👉 behero.ge\n#მათემატიკა #BeHero"
+    )
   let fbPostId = item.fbPostId
   let igContainerId = item.igContainerId
   let igMediaId = item.igMediaId

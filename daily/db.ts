@@ -427,3 +427,14 @@ export async function fillCaption(id: string, caption: string): Promise<boolean>
     WHERE id = ${id} AND caption = '' RETURNING id`
   return Array.isArray(updated) && updated.length > 0
 }
+
+/** Every slot not yet posted, for caption updates. */
+export async function listUnposted(): Promise<DailyItem[]> {
+  const sql = await db()
+  return rows(await sql`SELECT * FROM daily_items WHERE publish_status <> 'published'`)
+}
+
+export async function updateCaption(id: string, caption: string): Promise<void> {
+  const sql = await db()
+  await sql`UPDATE daily_items SET caption = ${caption}, updated_at = now() WHERE id = ${id}`
+}

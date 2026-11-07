@@ -21,7 +21,9 @@ import {
   getItem,
   fillCaption,
   getSetting,
+  listUnposted,
   listWithoutCaption,
+  updateCaption,
   setSetting,
   listDay,
   listDaysWithContent,
@@ -179,10 +181,18 @@ export async function getTakenSlots(
 }
 
 const CAPTION_FOOTER_KEY = "caption_footer"
+/** The footer already added to existing captions, so it is added only once
+    and replaced (not stacked) when the footer changes. */
+const APPLIED_FOOTER_KEY = "caption_footer_applied"
+const DEFAULT_CAPTION_FOOTER = "სცადე უფასოდ 👉 behero.ge\n#მათემატიკა #BeHero"
+
+async function currentFooter(): Promise<string> {
+  return (await getSetting(CAPTION_FOOTER_KEY)) ?? DEFAULT_CAPTION_FOOTER
+}
 
 /** Fixed end of every auto caption: link, call to action, hashtags. */
 export async function getCaptionFooter(): Promise<Result<string>> {
-  return guard(async () => (await getSetting(CAPTION_FOOTER_KEY)) ?? "")
+  return guard(async () => await currentFooter())
 }
 
 export async function saveCaptionFooter(value: unknown): Promise<Result<string>> {
@@ -197,7 +207,8 @@ export async function saveCaptionFooter(value: unknown): Promise<Result<string>>
     Free: plain text, no AI call. Returns how many were filled. */
 export async function fillMissingCaptions(): Promise<Result<number>> {
   return guard(async () => {
-    const footer = (await getSetting(CAPTION_FOOTER_KEY)) ?? ""
+    const footer = await currentFooter()
+    await applyFooterToExisting(footer)
     let filled = 0
     for (const item of await listWithoutCaption()) {
       const caption = buildCaption(item.prompt, footer)
@@ -205,6 +216,21 @@ export async function fillMissingCaptions(): Promise<Result<number>> {
     }
     return filled
   })
+}
+
+/** Puts the footer at the end of every caption not yet posted: once per
+    footer text. A previously applied footer is swapped for the new one. */
+async function applyFooterToExisting(footer: string): Promise<void> {
+  const applied = await getSetting(APPLIED_FOOTER_KEY)
+  if (applied === footer) return
+  for (const item of await listUnposted()) {
+    if (!item.caption) continue
+    let body = item.caption
+    if (applied && body.includes(applied)) body = body.replace(applied, "").trimEnd()
+    if (footer && !body.includes(footer)) body = [body.trimEnd(), footer].filter(Boolean).join("\n\n")
+    if (body !== item.caption) await updateCaption(item.id, body.slice(0, 2200))
+  }
+  await setSetting(APPLIED_FOOTER_KEY, footer)
 }
 
 export async function savePlanItem(input: {
@@ -230,7 +256,7 @@ export async function savePlanItem(input: {
       typedCaption ||
       buildCaption(
         typeof input.prompt === "string" ? input.prompt : "",
-        (await getSetting(CAPTION_FOOTER_KEY)) ?? ""
+        await currentFooter()
       )
     if (prompt.length > 5000 || caption.length > 2200)
       throw new Error("ტექსტი ძალიან გრძელია (პრომტი ≤ 5000, caption ≤ 2200).")
