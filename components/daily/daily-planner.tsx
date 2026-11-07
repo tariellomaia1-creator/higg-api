@@ -129,7 +129,7 @@ export function DailyPlanner() {
     })
     // Slots saved before auto captions, or saved empty, get one on open.
     void fillMissingCaptions().then(async (result) => {
-      if (live && result.ok && result.data > 0) apply(await getDayView(null))
+      if (live && result.ok) apply(await getDayView(null))
     })
     return () => {
       live = false
