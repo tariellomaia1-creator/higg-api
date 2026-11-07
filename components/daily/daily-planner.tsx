@@ -212,9 +212,8 @@ export function DailyPlanner() {
         <div>
           <h1 className="font-heading text-2xl font-semibold">BeHero Daily</h1>
           <p className="text-sm text-muted-foreground">
-            ყოველდღე {VIDEOS_PER_DAY} ვიდეო და {POSTERS_PER_DAY} პოსტერი. გენერაცია
-            იწყება 06:00-ზე და 08:00-მდე მზადაა (თბილისის დრო). „ახლავე
-            გაშვება“ დღევანდელ შევსებულ სლოტებს მაშინვე იწყებს.
+            ყოველდღე {VIDEOS_PER_DAY} ვიდეო და {POSTERS_PER_DAY} პოსტერი. გენერაცია ხელით:
+            ბარათზე „ახლავე გენერაცია“, ან „ახლავე გაშვება“ დღის ყველა შევსებული სლოტისთვის.
             {!autoPublish
               ? " გამოქვეყნება ხელით: ჩამოტვირთე და ატვირთე."
               : scheduled

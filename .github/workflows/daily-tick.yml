@@ -1,11 +1,10 @@
 name: Daily content scheduler
 
-# Every 10 minutes: finish running generations, start today's slots from
-# 06:00 Tbilisi, and publish one post per hour from 08:00. All the logic lives
-# in the site's /api/cron/tick route; this job only calls it.
+# Runs one scheduler pass on demand (Actions → Run workflow). Generation and
+# posting are started by hand from the planner, so there is no schedule. To
+# automate again, add `schedule: - cron: "*/10 * * * *"` and set the
+# auto_generate setting to "on". All the logic lives in /api/cron/tick.
 on:
-  schedule:
-    - cron: "*/10 * * * *"
   workflow_dispatch:
 
 concurrency:
