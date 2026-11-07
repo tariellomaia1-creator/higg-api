@@ -269,6 +269,19 @@ async function startImageForKie(apiKey: string, item: DailyItem): Promise<string
   )
 }
 
+/** Temporary public URL for a stored result, for Meta to download. */
+async function publicCopy(item: DailyItem, url: string): Promise<string> {
+  const key = kieApiKey()
+  if (!key) throw new Error("KIE_API_KEY is not set.")
+  const { bytes, contentType } = await readFile(url)
+  return uploadToKie(
+    key,
+    bytes,
+    contentType,
+    `${item.day}-${item.kind}-${item.slot + 1}.${item.kind === "video" ? "mp4" : "jpg"}`
+  )
+}
+
 /** Posts to the Facebook Page once, and walks the Instagram container from
     creation to publication across passes (Reels take a while to process). */
 async function advancePublish(
@@ -277,7 +290,20 @@ async function advancePublish(
 ): Promise<PublishStatus> {
   const continuing = item.publishStatus === "publishing"
   const errors: string[] = continuing && item.publishError ? [item.publishError] : []
-  const media = item.resultUrl!
+  // Meta downloads the file itself; a private Blob URL is not reachable, so a
+  // new post gets a temporary public copy (kie.ai file storage, 24 h).
+  let media = item.resultUrl!
+  if (!continuing && isBlobUrl(media)) {
+    try {
+      media = await publicCopy(item, media)
+    } catch (caught) {
+      await updatePublish(item.id, {
+        publishStatus: "failed",
+        publishError: `ფაილის საჯარო ბმული ვერ შეიქმნა: ${message(caught)}`,
+      })
+      return "failed"
+    }
+  }
   let fbPostId = item.fbPostId
   let igContainerId = item.igContainerId
   let igMediaId = item.igMediaId
