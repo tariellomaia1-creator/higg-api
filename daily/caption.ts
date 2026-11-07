@@ -17,8 +17,25 @@ export function extractGeorgianQuotes(prompt: string): string[] {
   return found
 }
 
+/** Georgian passages written without quotes: runs of Georgian words with the
+    spaces, digits and punctuation between them. Used when nothing is quoted. */
+const GEORGIAN_RUN =
+  /(?:[0-9][0-9\s.,\-–₾%]*)?[\u10A0-\u10FF\u1C90-\u1CBF\u2D00-\u2D2F][\u10A0-\u10FF\u1C90-\u1CBF\u2D00-\u2D2F0-9\s,.!?…:;—–\-₾%()]*[\u10A0-\u10FF\u1C90-\u1CBF\u2D00-\u2D2F0-9!?….₾%)]/g
+const GEORGIAN_LETTERS = /[\u10A0-\u10FF\u1C90-\u1CBF\u2D00-\u2D2F]/g
+
+export function extractGeorgianRuns(prompt: string): string[] {
+  const found: string[] = []
+  for (const match of prompt.matchAll(GEORGIAN_RUN)) {
+    const text = match[0].replace(/\s+/g, " ").trim()
+    const letters = text.match(GEORGIAN_LETTERS)?.length ?? 0
+    if (letters >= 3 && !found.includes(text)) found.push(text)
+  }
+  return found
+}
+
 export function buildCaption(prompt: string, footer: string): string {
-  const quotes = extractGeorgianQuotes(prompt)
+  const quoted = extractGeorgianQuotes(prompt)
+  const quotes = quoted.length ? quoted : extractGeorgianRuns(prompt)
   const body = quotes.map((quote) => `„${quote}“`).join("\n")
   return [body, footer.trim()].filter(Boolean).join("\n\n").slice(0, 2200)
 }

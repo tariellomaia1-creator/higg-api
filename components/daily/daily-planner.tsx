@@ -127,6 +127,10 @@ export function DailyPlanner() {
     void getCaptionFooter().then((result) => {
       if (live && result.ok) setCaptionFooter(result.data)
     })
+    // Slots saved before auto captions, or saved empty, get one on open.
+    void fillMissingCaptions().then(async (result) => {
+      if (live && result.ok && result.data > 0) apply(await getDayView(null))
+    })
     return () => {
       live = false
     }
