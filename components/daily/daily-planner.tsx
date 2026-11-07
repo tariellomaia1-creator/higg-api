@@ -24,12 +24,14 @@ import {
 import type { ItemKind } from "@/daily/config"
 import {
   deleteDay,
+  getCaptionFooter,
   getCreditBalance,
   getDayView,
   getSetupStatus,
   logout,
   refreshGenerating,
   runSchedulerNow,
+  saveCaptionFooter,
 } from "@/daily/actions"
 import type { DayView, Result, SetupStatus } from "@/daily/actions"
 
@@ -67,6 +69,7 @@ export function DailyPlanner() {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
+  const [captionFooter, setCaptionFooter] = useState("")
   const [balance, setBalance] = useState<
     { value: number } | { error: string } | null
   >(null)
@@ -119,6 +122,9 @@ export function DailyPlanner() {
     })
     void getCreditBalance().then((result) => {
       if (live) setBalance(result.ok ? { value: result.data } : { error: result.error })
+    })
+    void getCaptionFooter().then((result) => {
+      if (live && result.ok) setCaptionFooter(result.data)
     })
     return () => {
       live = false
@@ -229,6 +235,8 @@ export function DailyPlanner() {
       </div>
 
       <CreditPanel balance={balance} view={view} onRefresh={() => void refreshBalance()} />
+
+      <CaptionFooterPanel value={captionFooter} onSaved={setCaptionFooter} />
 
       {toast ? (
         <div
@@ -367,6 +375,7 @@ export function DailyPlanner() {
                 slot={slot}
                 item={findItem(view, "video", slot)}
                 autoPublish={autoPublish}
+                captionFooter={captionFooter}
                 onChanged={() => void load(view.day)}
               />
             ))}
@@ -380,6 +389,7 @@ export function DailyPlanner() {
                 slot={slot}
                 item={findItem(view, "poster", slot)}
                 autoPublish={autoPublish}
+                captionFooter={captionFooter}
                 onChanged={() => void load(view.day)}
               />
             ))}
@@ -451,11 +461,19 @@ function CreditPanel({
         <p className="text-xs text-muted-foreground">დღის გეგმა (სავარაუდო)</p>
         <p className="font-medium">
           {planMin === planMax ? planMin : `${planMin}–${planMax}`} კრედიტი
+          <span className="text-muted-foreground">
+            {" "}
+            (≈ ${(planMin * USD_PER_CREDIT).toFixed(2)}
+            {planMin === planMax ? "" : `–$${(planMax * USD_PER_CREDIT).toFixed(2)}`})
+          </span>
         </p>
       </div>
       <div>
         <p className="text-xs text-muted-foreground">ამ დღეს დაიხარჯა</p>
-        <p className="font-medium">{Math.round(spentToday * 10) / 10} კრედიტი</p>
+        <p className="font-medium">
+          {Math.round(spentToday * 10) / 10} კრედიტი
+          <span className="text-muted-foreground"> (≈ ${(spentToday * USD_PER_CREDIT).toFixed(2)})</span>
+        </p>
       </div>
       {low ? (
         <p className="basis-full text-xs font-medium text-destructive">
@@ -466,5 +484,63 @@ function CreditPanel({
         განახლება
       </Button>
     </section>
+  )
+}
+
+function CaptionFooterPanel({
+  value,
+  onSaved,
+}: {
+  value: string
+  onSaved: (value: string) => void
+}) {
+  const [draft, setDraft] = useState<string | null>(null)
+  const [state, setState] = useState<"idle" | "saving" | "saved" | string>("idle")
+  const text = draft ?? value
+  async function save() {
+    setState("saving")
+    const result = await saveCaptionFooter(text)
+    if (result.ok) {
+      onSaved(result.data)
+      setDraft(null)
+      setState("saved")
+    } else setState(result.error)
+  }
+  return (
+    <details className="rounded-2xl border border-border bg-card p-4 text-sm">
+      <summary className="cursor-pointer font-medium">
+        Caption-ის მუდმივი ნაწილი
+        <span className="font-normal text-muted-foreground">
+          {" "}
+          · ემატება ყველა ავტომატურ caption-ს (ბმული, CTA, ჰეშთეგები)
+        </span>
+      </summary>
+      <div className="mt-3 flex flex-col gap-2">
+        <p className="text-xs text-muted-foreground">
+          caption = პრომტში ბრჭყალებით ჩაწერილი ქართული ტექსტი + ეს ნაწილი. ცარიელ caption-ს შენახვისას ავტომატურად
+          ვავსებ; შენ მიერ დაწერილს არ ვცვლი.
+        </p>
+        <textarea
+          value={text}
+          onChange={(event) => {
+            setDraft(event.target.value)
+            setState("idle")
+          }}
+          rows={4}
+          maxLength={1000}
+          placeholder={"სცადე უფასოდ 👉 behero.ge\n#მათემატიკა #ეროვნულები #BeHero"}
+          className="resize-y rounded-lg border border-input bg-input/30 px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+        />
+        <div className="flex items-center gap-3">
+          <Button onClick={save} disabled={state === "saving" || draft === null}>
+            შენახვა
+          </Button>
+          {state === "saved" ? <span className="text-xs text-primary">შენახულია ✓</span> : null}
+          {state !== "idle" && state !== "saving" && state !== "saved" ? (
+            <span className="text-xs text-destructive">{state}</span>
+          ) : null}
+        </div>
+      </div>
+    </details>
   )
 }

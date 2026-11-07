@@ -3,6 +3,7 @@ import "server-only"
 import { del } from "@vercel/blob"
 
 import { isBlobUrl, readFile, storeFile } from "./blob-server"
+import { buildCaption } from "./caption"
 import sharp from "sharp"
 
 import {
@@ -15,6 +16,7 @@ import {
 import {
   listGeneratable,
   listGenerating,
+  getSetting,
   listPublishable,
   listPublishing,
   markAttemptFailed,
@@ -327,6 +329,10 @@ async function advancePublish(
       return "failed"
     }
   }
+  // Old slots saved before auto captions get one now.
+  const caption =
+    item.caption ||
+    buildCaption(item.prompt, (await getSetting("caption_footer")) ?? "")
   let fbPostId = item.fbPostId
   let igContainerId = item.igContainerId
   let igMediaId = item.igMediaId
@@ -334,7 +340,7 @@ async function advancePublish(
 
   if (!fbPostId && !continuing) {
     try {
-      fbPostId = await publishFacebook(meta, item.kind, media, item.caption)
+      fbPostId = await publishFacebook(meta, item.kind, media, caption)
     } catch (caught) {
       errors.push(`Facebook: ${message(caught)}`)
     }
@@ -348,7 +354,7 @@ async function advancePublish(
             meta,
             item.kind,
             media,
-            item.caption
+            caption
           )
       }
       if (igContainerId) {

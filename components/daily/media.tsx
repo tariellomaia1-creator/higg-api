@@ -3,6 +3,7 @@
 import { Check, Copy, Download, Expand } from "lucide-react"
 import { useState } from "react"
 
+import { USD_PER_CREDIT } from "@/daily/config"
 import type { DailyItem } from "@/daily/db"
 
 import {
@@ -156,7 +157,9 @@ export function ResultViewer({
                 <p className="mt-2 whitespace-pre-wrap text-xs">{item.prompt}</p>
               </details>
               {item.creditsUsed > 0 ? (
-                <p className="text-xs text-muted-foreground">დაიხარჯა: {item.creditsUsed} კრედიტი</p>
+                <p className="text-xs text-muted-foreground">
+                  დაიხარჯა: {item.creditsUsed} კრედიტი (≈ ${(item.creditsUsed * USD_PER_CREDIT).toFixed(2)})
+                </p>
               ) : null}
             </div>
           </div>

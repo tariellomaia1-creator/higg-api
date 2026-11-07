@@ -5,6 +5,7 @@ import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 
 import { blobConfigured } from "./blob"
+import { buildCaption } from "./caption"
 import {
   SESSION_COOKIE,
   SESSION_MAX_AGE,
@@ -18,6 +19,8 @@ import {
   clearSlot,
   deleteDayItems,
   getItem,
+  getSetting,
+  setSetting,
   listDay,
   listDaysWithContent,
   listFinished,
@@ -173,6 +176,21 @@ export async function getTakenSlots(
   })
 }
 
+const CAPTION_FOOTER_KEY = "caption_footer"
+
+/** Fixed end of every auto caption: link, call to action, hashtags. */
+export async function getCaptionFooter(): Promise<Result<string>> {
+  return guard(async () => (await getSetting(CAPTION_FOOTER_KEY)) ?? "")
+}
+
+export async function saveCaptionFooter(value: unknown): Promise<Result<string>> {
+  return guard(async () => {
+    const footer = typeof value === "string" ? value.trim().slice(0, 1000) : ""
+    await setSetting(CAPTION_FOOTER_KEY, footer)
+    return footer
+  })
+}
+
 export async function savePlanItem(input: {
   day: unknown
   kind: unknown
@@ -189,7 +207,15 @@ export async function savePlanItem(input: {
     if (!Number.isInteger(slot) || slot < 0 || slot >= slotCount(kind))
       throw new Error("Invalid slot.")
     const prompt = typeof input.prompt === "string" ? input.prompt.trim() : ""
-    const caption = typeof input.caption === "string" ? input.caption.trim() : ""
+    const typedCaption = typeof input.caption === "string" ? input.caption.trim() : ""
+    // An empty caption is filled from the prompt's quoted Georgian text and
+    // the saved footer; a caption the user wrote is kept as is.
+    const caption =
+      typedCaption ||
+      buildCaption(
+        typeof input.prompt === "string" ? input.prompt : "",
+        (await getSetting(CAPTION_FOOTER_KEY)) ?? ""
+      )
     if (prompt.length > 5000 || caption.length > 2200)
       throw new Error("ტექსტი ძალიან გრძელია (პრომტი ≤ 5000, caption ≤ 2200).")
     let startImageUrl: string | null = null

@@ -6,6 +6,7 @@ import {
   ImagePlus,
   Loader2,
   RotateCcw,
+  WandSparkles,
   Send,
   Save,
   Trash2,
@@ -13,7 +14,8 @@ import {
 import { useId, useRef, useState } from "react"
 
 import type { ItemKind } from "@/daily/config"
-import { ESTIMATED_CREDITS, formatHour, publishHour } from "@/daily/config"
+import { buildCaption } from "@/daily/caption"
+import { ESTIMATED_CREDITS, USD_PER_CREDIT, formatHour, publishHour } from "@/daily/config"
 import {
   clearPlanItem,
   retryGeneration,
@@ -50,10 +52,12 @@ type Props = {
   item: DailyItem | undefined
   /** Meta is connected: show the posting hour and publish status. */
   autoPublish: boolean
+  /** Saved caption footer (link, call to action, hashtags). */
+  captionFooter: string
   onChanged: () => void
 }
 
-export function SlotCard({ day, kind, slot, item, autoPublish, onChanged }: Props) {
+export function SlotCard({ day, kind, slot, item, autoPublish, captionFooter, onChanged }: Props) {
   const fieldId = useId()
   const fileInput = useRef<HTMLInputElement>(null)
   const [prompt, setPrompt] = useState(item?.prompt ?? "")
@@ -243,15 +247,26 @@ export function SlotCard({ day, kind, slot, item, autoPublish, onChanged }: Prop
         />
       </div>
       <div className="flex flex-col gap-1">
-        <label htmlFor={`${fieldId}-caption`} className="text-xs font-medium">
-          {autoPublish ? "Caption (Facebook / Instagram)" : "Caption (შენთვის, ხელით დასაპოსტად)"}
-        </label>
+        <div className="flex items-center justify-between gap-2">
+          <label htmlFor={`${fieldId}-caption`} className="text-xs font-medium">
+            {autoPublish ? "Caption (Facebook / Instagram)" : "Caption (შენთვის, ხელით დასაპოსტად)"}
+          </label>
+          <button
+            type="button"
+            onClick={() => setCaption(buildCaption(prompt, captionFooter))}
+            disabled={!prompt.trim()}
+            className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-primary hover:bg-muted disabled:opacity-40"
+          >
+            <WandSparkles className="size-3.5" /> პრომტიდან
+          </button>
+        </div>
         <textarea
           id={`${fieldId}-caption`}
           value={caption}
           onChange={(event) => setCaption(event.target.value)}
-          rows={2}
+          rows={3}
           maxLength={2200}
+          placeholder="ცარიელს შენახვისას ავტომატურად შევავსებ პრომტის ქართული ტექსტით"
           className="resize-y rounded-lg border border-input bg-input/30 px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         />
       </div>
@@ -362,15 +377,18 @@ async function explainUploadFailure(caught: unknown): Promise<string> {
 
 function CreditLine({ kind, item }: { kind: ItemKind; item: DailyItem | undefined }) {
   const estimate = ESTIMATED_CREDITS[kind]
+  const usd = (n: number) => (n * USD_PER_CREDIT).toFixed(2)
   const range =
-    estimate.min === estimate.max ? `${estimate.min}` : `~${estimate.min}–${estimate.max}`
+    estimate.min === estimate.max
+      ? `${estimate.min} კრედიტი (≈ $${usd(estimate.min)})`
+      : `~${estimate.min}–${estimate.max} კრედიტი (≈ $${usd(estimate.min)}–${usd(estimate.max)})`
   const spent = item?.creditsUsed ?? 0
   const finished = item?.status === "ready" || item?.status === "failed"
   return (
     <p className="text-xs text-muted-foreground">
       {finished || spent > 0
-        ? `დაიხარჯა: ${formatCredits(spent)} კრედიტი`
-        : `სავარაუდო ხარჯი: ${range} კრედიტი`}
+        ? `დაიხარჯა: ${formatCredits(spent)} კრედიტი (≈ $${usd(spent)})`
+        : `სავარაუდო ხარჯი: ${range}`}
     </p>
   )
 }
