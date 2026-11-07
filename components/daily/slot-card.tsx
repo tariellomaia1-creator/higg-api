@@ -6,6 +6,7 @@ import {
   ImagePlus,
   Loader2,
   RotateCcw,
+  Send,
   Save,
   Trash2,
 } from "lucide-react"
@@ -16,6 +17,7 @@ import { ESTIMATED_CREDITS, formatHour, publishHour } from "@/daily/config"
 import {
   clearPlanItem,
   retryGeneration,
+  publishNow,
   retryPublish,
   savePlanItem,
 } from "@/daily/actions"
@@ -130,6 +132,22 @@ export function SlotCard({ day, kind, slot, item, autoPublish, onChanged }: Prop
     setBusy(null)
     if (!result.ok) setError(result.error)
     else onChanged()
+  }
+
+  async function postNow() {
+    if (!item) return
+    if (
+      !window.confirm(
+        `${title}: გამოვაქვეყნო ახლავე Facebook-ზე და Instagram-ზე? ეს ნამდვილი პოსტია.`
+      )
+    )
+      return
+    setBusy("retry")
+    setError(null)
+    const result = await publishNow(item.id)
+    setBusy(null)
+    if (!result.ok) setError(result.error)
+    onChanged()
   }
 
   async function retry(kindOfRetry: "generation" | "publish") {
@@ -270,6 +288,11 @@ export function SlotCard({ day, kind, slot, item, autoPublish, onChanged }: Prop
         {item?.status === "failed" ? (
           <Button variant="secondary" onClick={() => retry("generation")} disabled={busy !== null}>
             <RotateCcw /> თავიდან გენერაცია
+          </Button>
+        ) : null}
+        {item && autoPublish && item.status === "ready" && item.publishStatus === "waiting" ? (
+          <Button variant="secondary" onClick={postNow} disabled={busy !== null || dirty}>
+            {busy === "retry" ? <Loader2 className="animate-spin" /> : <Send />} ახლავე გამოქვეყნება
           </Button>
         ) : null}
         {item && autoPublish && (item.publishStatus === "failed" || item.publishStatus === "partial") ? (
