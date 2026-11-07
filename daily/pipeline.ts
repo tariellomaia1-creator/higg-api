@@ -117,10 +117,14 @@ export async function runTick(
   // 2. Start what is due: today's slots from 06:00 (or at once when run by
   //    hand from the planner), and yesterday's leftovers.
   // Slots beyond today's count (left from an earlier, larger plan) are ignored.
+  // A scheduler call starts nothing unless automatic generation is switched
+  // on; a hand-started run from the planner always may.
+  const autoGenerate = (await getSetting("auto_generate")) === "on"
   const due = (await listGeneratable(day)).filter(
     (item) =>
       item.slot < slotCount(item.kind) &&
-      (item.day < day || hour >= GENERATE_FROM_HOUR || options.startTodayNow)
+      (options.startTodayNow ||
+        (autoGenerate && (item.day < day || hour >= GENERATE_FROM_HOUR)))
   )
   for (const item of due) {
     if (item.attempts >= MAX_ATTEMPTS) continue

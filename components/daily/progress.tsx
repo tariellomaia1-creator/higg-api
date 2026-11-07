@@ -168,7 +168,7 @@ export function StageState({
       <p className="font-medium">{saved ? "რიგშია" : "აქ გამოჩნდება შედეგი"}</p>
       <p className="text-xs text-muted-foreground">
         {saved
-          ? `დაიწყება ${startsOn(item.day)} 06:00-ზე. ახლავე სცადე: „ახლავე გენერაცია“.`
+          ? "დასაწყებად დააჭირე „ახლავე გენერაცია“."
           : kind === "video"
             ? "ატვირთე start image, დაწერე პრომტი და შეინახე."
             : "დაწერე პრომტი და შეინახე."}
@@ -179,14 +179,4 @@ export function StageState({
 
 export function ReadyMark() {
   return <CheckCircle2 className="size-4 text-primary" aria-hidden />
-}
-
-function startsOn(day: string): string {
-  const today = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString().slice(0, 10)
-  if (day === today) return "დღეს"
-  const tomorrow = new Date(Date.parse(`${today}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10)
-  if (day === tomorrow) return "ხვალ"
-  return new Intl.DateTimeFormat("ka-GE", { day: "numeric", month: "long", timeZone: "UTC" }).format(
-    new Date(`${day}T00:00:00Z`)
-  )
 }
