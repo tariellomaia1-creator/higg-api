@@ -164,6 +164,12 @@ export async function runTick(
   for (const item of publishable.filter((i) => i.publishStatus === "publishing")) {
     if ((await advancePublish(meta, item)) === "published") report.published++
   }
+  // Scheduled posting is off unless switched on in the planner; posts that
+  // were already started (above) and "publish now" are not affected.
+  if ((await getSetting("auto_publish")) !== "on") {
+    report.notes.push("Automatic publishing is off.")
+    return report
+  }
   // At most one new post per pass keeps posts at least one pass apart even
   // when the scheduler catches up after an outage.
   const next = publishable

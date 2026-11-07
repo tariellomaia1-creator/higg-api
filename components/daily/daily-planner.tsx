@@ -28,6 +28,7 @@ import type { ItemKind, PosterSettings } from "@/daily/config"
 import {
   deleteDay,
   fillMissingCaptions,
+  getAutoPublish,
   getCaptionFooter,
   getPosterSettings,
   getCreditBalance,
@@ -37,6 +38,7 @@ import {
   refreshGenerating,
   runSchedulerNow,
   saveCaptionFooter,
+  setAutoPublish,
   savePosterSettings,
 } from "@/daily/actions"
 import type { DayView, Result, SetupStatus } from "@/daily/actions"
@@ -76,6 +78,7 @@ export function DailyPlanner() {
   const [notice, setNotice] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
   const [captionFooter, setCaptionFooter] = useState("")
+  const [scheduled, setScheduled] = useState(false)
   const [balance, setBalance] = useState<
     { value: number } | { error: string } | null
   >(null)
@@ -131,6 +134,9 @@ export function DailyPlanner() {
     })
     void getCaptionFooter().then((result) => {
       if (live && result.ok) setCaptionFooter(result.data)
+    })
+    void getAutoPublish().then((result) => {
+      if (live && result.ok) setScheduled(result.data)
     })
     // Slots saved before auto captions, or saved empty, get one on open.
     void fillMissingCaptions().then(async (result) => {
@@ -209,9 +215,11 @@ export function DailyPlanner() {
             ყოველდღე {VIDEOS_PER_DAY} ვიდეო და {POSTERS_PER_DAY} პოსტერი. გენერაცია
             იწყება 06:00-ზე და 08:00-მდე მზადაა (თბილისის დრო). „ახლავე
             გაშვება“ დღევანდელ შევსებულ სლოტებს მაშინვე იწყებს.
-            {autoPublish
-              ? " გამოქვეყნება Facebook-ზე და Instagram-ზე 08:00-დან, საათში ერთი."
-              : " გამოქვეყნება ხელით: ჩამოტვირთე და ატვირთე."}
+            {!autoPublish
+              ? " გამოქვეყნება ხელით: ჩამოტვირთე და ატვირთე."
+              : scheduled
+                ? " გამოქვეყნება Facebook-ზე და Instagram-ზე ავტომატურად: ვიდეო 08:00-ზე, პოსტერი 09:00-ზე."
+                : " გამოქვეყნება ხელით: ბარათზე „ახლავე გამოქვეყნება“."}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -245,6 +253,29 @@ export function DailyPlanner() {
       </div>
 
       <CreditPanel balance={balance} view={view} onRefresh={() => void refreshBalance()} />
+
+      {autoPublish ? (
+        <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card p-4 text-sm">
+          <div className="min-w-0">
+            <p className="font-medium">ავტომატური გამოქვეყნება (Facebook + Instagram)</p>
+            <p className="text-xs text-muted-foreground">
+              {scheduled
+                ? "ჩართულია: მზა ვიდეო 08:00-ზე, პოსტერი 09:00-ზე თავისით გამოქვეყნდება."
+                : "გამორთულია: არაფერი გამოქვეყნდება თავისით. დასაპოსტად დააჭირე ბარათზე „ახლავე გამოქვეყნება“."}
+            </p>
+          </div>
+          <Button
+            variant={scheduled ? "secondary" : "outline"}
+            onClick={async () => {
+              const result = await setAutoPublish(!scheduled)
+              if (result.ok) setScheduled(result.data)
+              else setError(result.error)
+            }}
+          >
+            {scheduled ? "გამორთვა" : "ჩართვა"}
+          </Button>
+        </section>
+      ) : null}
 
       <PosterQualityPanel />
 
@@ -391,6 +422,7 @@ export function DailyPlanner() {
                 slot={slot}
                 item={findItem(view, "video", slot)}
                 autoPublish={autoPublish}
+                scheduledPublish={scheduled}
                 captionFooter={captionFooter}
                 onChanged={() => void load(view.day)}
               />
@@ -405,6 +437,7 @@ export function DailyPlanner() {
                 slot={slot}
                 item={findItem(view, "poster", slot)}
                 autoPublish={autoPublish}
+                scheduledPublish={scheduled}
                 captionFooter={captionFooter}
                 onChanged={() => void load(view.day)}
               />

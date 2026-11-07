@@ -194,6 +194,19 @@ export async function getTakenSlots(
   })
 }
 
+/** Scheduled posting at the slot's hour. Off by default; "publish now"
+    always works while Meta is connected. */
+export async function getAutoPublish(): Promise<Result<boolean>> {
+  return guard(async () => (await getSetting("auto_publish")) === "on")
+}
+
+export async function setAutoPublish(on: unknown): Promise<Result<boolean>> {
+  return guard(async () => {
+    await setSetting("auto_publish", on === true ? "on" : "off")
+    return on === true
+  })
+}
+
 const POSTER_SETTINGS_KEY = "poster_settings"
 
 export async function getPosterSettings(): Promise<Result<PosterSettings>> {
