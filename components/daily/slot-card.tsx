@@ -4,6 +4,7 @@ import { uploadPresigned } from "@vercel/blob/client"
 import {
   Download,
   ImagePlus,
+  Play,
   Loader2,
   RotateCcw,
   WandSparkles,
@@ -18,6 +19,7 @@ import { buildCaption } from "@/daily/caption"
 import { ESTIMATED_CREDITS, USD_PER_CREDIT, formatHour, publishHour } from "@/daily/config"
 import {
   clearPlanItem,
+  generateNow,
   retryGeneration,
   publishNow,
   retryPublish,
@@ -136,6 +138,16 @@ export function SlotCard({ day, kind, slot, item, autoPublish, captionFooter, on
     setBusy(null)
     if (!result.ok) setError(result.error)
     else onChanged()
+  }
+
+  async function startNow() {
+    if (!item) return
+    setBusy("retry")
+    setError(null)
+    const result = await generateNow(item.id)
+    setBusy(null)
+    if (!result.ok) setError(result.error)
+    onChanged()
   }
 
   async function postNow() {
@@ -300,6 +312,11 @@ export function SlotCard({ day, kind, slot, item, autoPublish, captionFooter, on
           {busy === "save" ? <Loader2 className="animate-spin" /> : <Save />}
           შენახვა
         </Button>
+        {item?.status === "pending" && !dirty && !incomplete ? (
+          <Button variant="secondary" onClick={startNow} disabled={busy !== null}>
+            {busy === "retry" ? <Loader2 className="animate-spin" /> : <Play />} ახლავე გენერაცია
+          </Button>
+        ) : null}
         {item?.status === "failed" ? (
           <Button variant="secondary" onClick={() => retry("generation")} disabled={busy !== null}>
             <RotateCcw /> თავიდან გენერაცია

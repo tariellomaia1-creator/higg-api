@@ -37,7 +37,13 @@ import {
 import type { DailyItem } from "./db"
 import { getKieBalance, kieApiKey } from "./kie"
 import { metaConfig } from "./meta"
-import { continuePublishing, pollInFlight, publishItemNow, runTick } from "./pipeline"
+import {
+  continuePublishing,
+  generateItemNow,
+  pollInFlight,
+  publishItemNow,
+  runTick,
+} from "./pipeline"
 import type { TickReport } from "./pipeline"
 import { requireSession } from "./session"
 
@@ -325,6 +331,17 @@ export async function refreshGenerating(): Promise<Result<number>> {
     const polled = await pollInFlight()
     await continuePublishing()
     return polled.completed
+  })
+}
+
+/** Generates one planned slot now, even if its day is still ahead. */
+export async function generateNow(id: unknown): Promise<Result<null>> {
+  return guard(async () => {
+    if (typeof id !== "string") throw new Error("Invalid item.")
+    const item = await getItem(id)
+    if (!item) throw new Error("Item not found.")
+    await generateItemNow(item)
+    return null
   })
 }
 
