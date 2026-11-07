@@ -413,3 +413,17 @@ export async function setSetting(key: string, value: string): Promise<void> {
   await sql`INSERT INTO daily_settings (key, value) VALUES (${key}, ${value})
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`
 }
+
+/** Slots not yet posted whose caption is still empty. */
+export async function listWithoutCaption(): Promise<DailyItem[]> {
+  const sql = await db()
+  return rows(await sql`SELECT * FROM daily_items WHERE caption = '' AND publish_status <> 'published'`)
+}
+
+/** Sets a caption only if it is still empty, so a typed one is never lost. */
+export async function fillCaption(id: string, caption: string): Promise<boolean> {
+  const sql = await db()
+  const updated = await sql`UPDATE daily_items SET caption = ${caption}, updated_at = now()
+    WHERE id = ${id} AND caption = '' RETURNING id`
+  return Array.isArray(updated) && updated.length > 0
+}
