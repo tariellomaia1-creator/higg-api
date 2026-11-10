@@ -1,7 +1,7 @@
 /** Posting times for the auto-posting queue, in Tbilisi time (UTC+4 all
     year). Pure, so the server and the planner agree on the slots. */
 
-export const DEFAULT_QUEUE_TIMES = ["10:00", "13:00", "16:00", "19:00", "22:00"]
+export const DEFAULT_QUEUE_TIMES = ["10:00", "13:00", "17:00", "21:00", "23:00"]
 
 const TBILISI_OFFSET_MS = 4 * 60 * 60 * 1000
 

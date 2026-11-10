@@ -422,7 +422,7 @@ function SettingsPanel({
           value={times}
           onChange={(event) => setTimes(event.target.value)}
           className="h-9 rounded-lg border border-input bg-input/30 px-3 text-sm"
-          placeholder="10:00, 13:00, 16:00, 19:00, 22:00"
+          placeholder="10:00, 13:00, 17:00, 21:00, 23:00"
         />
       </label>
       <label className="flex items-center gap-2">
