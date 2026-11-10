@@ -6,6 +6,7 @@ import {
   Clapperboard,
   Images,
   Layers,
+  Megaphone,
   LogOut,
   Play,
   Trash2,
@@ -225,6 +226,12 @@ export function DailyPlanner() {
           <Button variant="outline" onClick={runNow} disabled={running}>
             <Play /> {running ? "მუშაობს…" : "ახლავე გაშვება"}
           </Button>
+          <Link
+            href="/queue"
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-2.5 text-sm hover:bg-muted"
+          >
+            <Megaphone className="size-4" /> Auto posting
+          </Link>
           <Link
             href="/batch"
             className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-2.5 text-sm hover:bg-muted"

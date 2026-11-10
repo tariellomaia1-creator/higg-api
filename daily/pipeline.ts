@@ -2,7 +2,9 @@ import "server-only"
 
 import { del } from "@vercel/blob"
 
-import { isBlobUrl, readFile, storeFile } from "./blob-server"
+import { isBlobUrl, readFile, signedReadUrl, storeFile } from "./blob-server"
+import { postToMeta } from "./publish"
+import { processQueue } from "./queue"
 import { buildCaption } from "./caption"
 import sharp from "sharp"
 
@@ -18,6 +20,7 @@ import {
   listGeneratable,
   listGenerating,
   getSetting,
+  setSetting,
   listPublishable,
   listPublishing,
   markAttemptFailed,
@@ -40,13 +43,7 @@ import {
   kieApiKey,
   veoLiteTask,
 } from "./kie"
-import {
-  createInstagramContainer,
-  instagramContainerStatus,
-  metaConfig,
-  publishFacebook,
-  publishInstagramContainer,
-} from "./meta"
+import { metaConfig } from "./meta"
 import type { MetaConfig } from "./meta"
 
 export type TickReport = {
@@ -106,6 +103,7 @@ export async function runTick(
     published: 0,
     notes: [],
   }
+  await setSetting("last_tick_at", now.toISOString()).catch(() => undefined)
   const apiKey = requireKieKey()
 
   // 1. Running generations.
@@ -162,6 +160,11 @@ export async function runTick(
     report.notes.push("Meta is not connected; publishing skipped.")
     return report
   }
+  // The auto-posting queue: posts due items, one new post per pass.
+  const queued = await processQueue(meta, now)
+  report.published += queued.published
+  report.notes.push(...queued.notes)
+
   const publishable = (await listPublishable(day)).filter(
     (item) => item.slot < slotCount(item.kind)
   )
@@ -348,26 +351,28 @@ async function publicCopy(item: DailyItem, url: string): Promise<string> {
   )
 }
 
-/** Posts to the Facebook Page once, and walks the Instagram container from
-    creation to publication across passes (Reels take a while to process). */
+/** Posts a daily slot to the Facebook Page and Instagram, one step at a
+    time (see postToMeta). */
 async function advancePublish(
   meta: MetaConfig,
   item: DailyItem
 ): Promise<PublishStatus> {
   const continuing = item.publishStatus === "publishing"
-  const errors: string[] = continuing && item.publishError ? [item.publishError] : []
-  // Meta downloads the file itself; a private Blob URL is not reachable, so a
-  // new post gets a temporary public copy (kie.ai file storage, 24 h).
-  let media = item.resultUrl!
-  if (!continuing && isBlobUrl(media)) {
-    try {
-      media = await publicCopy(item, media)
-    } catch (caught) {
-      await updatePublish(item.id, {
-        publishStatus: "failed",
-        publishError: `ფაილის საჯარო ბმული ვერ შეიქმნა: ${message(caught)}`,
-      })
-      return "failed"
+  // Meta downloads the file itself, so a new post needs a URL it can reach:
+  // a signed link to our file, or a temporary public copy as a fallback.
+  let media: string | null = null
+  if (!continuing) {
+    media = item.resultUrl!
+    if (isBlobUrl(media)) {
+      try {
+        media = await signedReadUrl(media).catch(() => publicCopy(item, item.resultUrl!))
+      } catch (caught) {
+        await updatePublish(item.id, {
+          publishStatus: "failed",
+          publishError: `ფაილის საჯარო ბმული ვერ შეიქმნა: ${message(caught)}`,
+        })
+        return "failed"
+      }
     }
   }
   // Old slots saved before auto captions get one now.
@@ -377,57 +382,26 @@ async function advancePublish(
       item.prompt,
       (await getSetting("caption_footer")) ?? "სცადე უფასოდ 👉 behero.ge\n#მათემატიკა #BeHero"
     )
-  let fbPostId = item.fbPostId
-  let igContainerId = item.igContainerId
-  let igMediaId = item.igMediaId
-  let pending = false
-
-  if (!fbPostId && !continuing) {
-    try {
-      fbPostId = await publishFacebook(meta, item.kind, media, caption)
-    } catch (caught) {
-      errors.push(`Facebook: ${message(caught)}`)
-    }
-  }
-
-  if (meta.igUserId && !igMediaId) {
-    try {
-      if (!igContainerId) {
-        if (!continuing)
-          igContainerId = await createInstagramContainer(
-            meta,
-            item.kind,
-            media,
-            caption
-          )
-      }
-      if (igContainerId) {
-        const state = await instagramContainerStatus(meta, igContainerId)
-        if (state === "FINISHED")
-          igMediaId = await publishInstagramContainer(meta, igContainerId)
-        else if (state === "ERROR" || state === "EXPIRED")
-          errors.push(`Instagram: მედია ვერ დამუშავდა (${state}).`)
-        else pending = true
-      }
-    } catch (caught) {
-      errors.push(`Instagram: ${message(caught)}`)
-    }
-  }
-
-  const status: PublishStatus = pending
-    ? "publishing"
-    : errors.length === 0
-      ? "published"
-      : fbPostId || igMediaId
-        ? "partial"
-        : "failed"
-  await updatePublish(item.id, {
-    publishStatus: status,
-    fbPostId,
-    igContainerId,
-    igMediaId,
-    publishError: errors.length ? errors.join(" · ") : null,
-    published: status === "published" || status === "partial",
+  const outcome = await postToMeta(meta, {
+    kind: item.kind,
+    mediaUrl: media,
+    caption,
+    state: {
+      fbPostId: item.fbPostId,
+      igContainerId: item.igContainerId,
+      igMediaId: item.igMediaId,
+    },
+    continuing,
+    previousError: item.publishError,
+    targets: { facebook: true, instagram: true },
   })
-  return status
+  await updatePublish(item.id, {
+    publishStatus: outcome.status,
+    fbPostId: outcome.fbPostId,
+    igContainerId: outcome.igContainerId,
+    igMediaId: outcome.igMediaId,
+    publishError: outcome.error,
+    published: outcome.status === "published" || outcome.status === "partial",
+  })
+  return outcome.status
 }

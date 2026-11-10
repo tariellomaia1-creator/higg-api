@@ -72,6 +72,28 @@ async function db(): Promise<Sql> {
 async function createSchema(sql: Sql): Promise<void> {
   await sql`CREATE TABLE IF NOT EXISTS daily_settings (key text PRIMARY KEY, value text NOT NULL)`
   await sql`
+    CREATE TABLE IF NOT EXISTS post_queue (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      position double precision NOT NULL,
+      kind text NOT NULL CHECK (kind IN ('video', 'image')),
+      file_name text NOT NULL DEFAULT '',
+      media_url text,
+      media_type text NOT NULL DEFAULT '',
+      bytes bigint NOT NULL DEFAULT 0,
+      caption text NOT NULL DEFAULT '',
+      to_facebook boolean NOT NULL DEFAULT true,
+      to_instagram boolean NOT NULL DEFAULT true,
+      scheduled_at timestamptz,
+      status text NOT NULL DEFAULT 'queued',
+      fb_post_id text,
+      ig_container_id text,
+      ig_media_id text,
+      error text,
+      published_at timestamptz,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )`
+  await sql`
     CREATE TABLE IF NOT EXISTS daily_items (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       day date NOT NULL,
@@ -373,7 +395,9 @@ export async function resetPublish(id: string): Promise<void> {
 /** Bytes this app keeps in Blob storage: start images and results. */
 export async function storageUsedBytes(): Promise<number> {
   const sql = await db()
-  const result = await sql`SELECT COALESCE(SUM(start_image_bytes + result_bytes), 0) AS used FROM daily_items`
+  const result = await sql`SELECT
+    (SELECT COALESCE(SUM(start_image_bytes + result_bytes), 0) FROM daily_items) +
+    (SELECT COALESCE(SUM(bytes), 0) FROM post_queue) AS used`
   const row = Array.isArray(result) ? (result[0] as Record<string, unknown>) : undefined
   return num(row?.used)
 }
@@ -437,4 +461,178 @@ export async function listUnposted(): Promise<DailyItem[]> {
 export async function updateCaption(id: string, caption: string): Promise<void> {
   const sql = await db()
   await sql`UPDATE daily_items SET caption = ${caption}, updated_at = now() WHERE id = ${id}`
+}
+
+// ---------------------------------------------------------------- post queue
+
+export type QueueStatus = "queued" | "publishing" | "published" | "partial" | "failed"
+
+export type QueueItem = {
+  id: string
+  position: number
+  kind: "video" | "image"
+  fileName: string
+  mediaUrl: string | null
+  mediaType: string
+  bytes: number
+  caption: string
+  toFacebook: boolean
+  toInstagram: boolean
+  scheduledAt: string | null
+  status: QueueStatus
+  fbPostId: string | null
+  igContainerId: string | null
+  igMediaId: string | null
+  error: string | null
+  publishedAt: string | null
+}
+
+function toQueueItem(row: Record<string, unknown>): QueueItem {
+  return {
+    id: String(row.id),
+    position: num(row.position),
+    kind: row.kind === "image" ? "image" : "video",
+    fileName: str(row.file_name) ?? "",
+    mediaUrl: str(row.media_url),
+    mediaType: str(row.media_type) ?? "",
+    bytes: num(row.bytes),
+    caption: str(row.caption) ?? "",
+    toFacebook: row.to_facebook !== false,
+    toInstagram: row.to_instagram !== false,
+    scheduledAt: isoOrNull(row.scheduled_at),
+    status: (str(row.status) ?? "queued") as QueueStatus,
+    fbPostId: str(row.fb_post_id),
+    igContainerId: str(row.ig_container_id),
+    igMediaId: str(row.ig_media_id),
+    error: str(row.error),
+    publishedAt: isoOrNull(row.published_at),
+  }
+}
+
+function queueRows(result: unknown): QueueItem[] {
+  return Array.isArray(result)
+    ? result.map((row) => toQueueItem(row as Record<string, unknown>))
+    : []
+}
+
+/** Waiting and in-progress items in order, then the latest posted ones. */
+export async function listQueue(): Promise<QueueItem[]> {
+  const sql = await db()
+  const open = queueRows(
+    await sql`SELECT * FROM post_queue WHERE status <> 'published' ORDER BY position`
+  )
+  const done = queueRows(
+    await sql`SELECT * FROM post_queue WHERE status = 'published' ORDER BY published_at DESC NULLS LAST LIMIT 60`
+  )
+  return [...open, ...done]
+}
+
+export async function getQueueItem(id: string): Promise<QueueItem | null> {
+  const sql = await db()
+  return queueRows(await sql`SELECT * FROM post_queue WHERE id = ${id}`)[0] ?? null
+}
+
+export async function insertQueueItems(
+  items: Array<{
+    kind: "video" | "image"
+    fileName: string
+    mediaUrl: string
+    mediaType: string
+    bytes: number
+    caption: string
+  }>
+): Promise<void> {
+  const sql = await db()
+  const result = await sql`SELECT COALESCE(MAX(position), 0) AS top FROM post_queue`
+  let position = num(Array.isArray(result) ? (result[0] as Record<string, unknown>)?.top : 0)
+  for (const item of items) {
+    position += 1
+    await sql`INSERT INTO post_queue (position, kind, file_name, media_url, media_type, bytes, caption)
+      VALUES (${position}, ${item.kind}, ${item.fileName}, ${item.mediaUrl}, ${item.mediaType}, ${item.bytes}, ${item.caption})`
+  }
+}
+
+export async function setQueueCaption(id: string, caption: string): Promise<void> {
+  const sql = await db()
+  await sql`UPDATE post_queue SET caption = ${caption}, updated_at = now() WHERE id = ${id}`
+}
+
+export async function setQueueTargets(id: string, facebook: boolean, instagram: boolean): Promise<void> {
+  const sql = await db()
+  await sql`UPDATE post_queue SET to_facebook = ${facebook}, to_instagram = ${instagram}, updated_at = now() WHERE id = ${id}`
+}
+
+export async function setQueuePosition(id: string, position: number): Promise<void> {
+  const sql = await db()
+  await sql`UPDATE post_queue SET position = ${position}, updated_at = now() WHERE id = ${id}`
+}
+
+export async function setQueueSchedule(id: string, at: string | null): Promise<void> {
+  const sql = await db()
+  await sql`UPDATE post_queue SET scheduled_at = ${at}, updated_at = now() WHERE id = ${id}`
+}
+
+export async function saveQueuePublish(
+  id: string,
+  fields: {
+    status: QueueStatus
+    fbPostId: string | null
+    igContainerId: string | null
+    igMediaId: string | null
+    error: string | null
+  }
+): Promise<void> {
+  const sql = await db()
+  const done = fields.status === "published" || fields.status === "partial"
+  await sql`UPDATE post_queue SET status = ${fields.status}, fb_post_id = ${fields.fbPostId},
+    ig_container_id = ${fields.igContainerId}, ig_media_id = ${fields.igMediaId},
+    error = ${fields.error},
+    published_at = CASE WHEN ${done} THEN COALESCE(published_at, now()) ELSE published_at END,
+    updated_at = now() WHERE id = ${id}`
+}
+
+/** After posting: the file is gone from storage, the record stays. */
+export async function clearQueueMedia(id: string): Promise<void> {
+  const sql = await db()
+  await sql`UPDATE post_queue SET media_url = NULL, bytes = 0, updated_at = now() WHERE id = ${id}`
+}
+
+export async function resetQueueItem(id: string): Promise<void> {
+  const sql = await db()
+  await sql`UPDATE post_queue SET status = 'queued', error = NULL,
+    ig_container_id = CASE WHEN ig_media_id IS NULL THEN NULL ELSE ig_container_id END,
+    updated_at = now() WHERE id = ${id} AND status IN ('failed', 'partial')`
+}
+
+export async function deleteQueueItem(id: string): Promise<QueueItem | null> {
+  const sql = await db()
+  return queueRows(await sql`DELETE FROM post_queue WHERE id = ${id} RETURNING *`)[0] ?? null
+}
+
+export async function listQueuedInOrder(): Promise<QueueItem[]> {
+  const sql = await db()
+  return queueRows(
+    await sql`SELECT * FROM post_queue WHERE status = 'queued' AND media_url IS NOT NULL ORDER BY position`
+  )
+}
+
+export async function listQueuePublishing(): Promise<QueueItem[]> {
+  const sql = await db()
+  return queueRows(await sql`SELECT * FROM post_queue WHERE status = 'publishing'`)
+}
+
+/** The earliest queued item whose time has come. */
+export async function nextDueQueueItem(nowIso: string): Promise<QueueItem | null> {
+  const sql = await db()
+  return (
+    queueRows(await sql`SELECT * FROM post_queue
+      WHERE status = 'queued' AND media_url IS NOT NULL AND scheduled_at IS NOT NULL AND scheduled_at <= ${nowIso}
+      ORDER BY scheduled_at, position LIMIT 1`)[0] ?? null
+  )
+}
+
+export async function queueStorageBytes(): Promise<number> {
+  const sql = await db()
+  const result = await sql`SELECT COALESCE(SUM(bytes), 0) AS used FROM post_queue`
+  return num(Array.isArray(result) ? (result[0] as Record<string, unknown>)?.used : 0)
 }
