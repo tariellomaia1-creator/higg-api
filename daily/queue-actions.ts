@@ -60,8 +60,16 @@ export type QueueView = {
   storage: { queue: number; limit: number }
 }
 
+/** Waiting files without a caption get the default one. */
+async function fillEmptyQueueCaptions(caption: string): Promise<void> {
+  if (!caption) return
+  for (const item of await listQueuedInOrder())
+    if (!item.caption) await setQueueCaption(item.id, caption)
+}
+
 export async function getQueueView(): Promise<Result<QueueView>> {
   return guard(async () => {
+    await fillEmptyQueueCaptions((await readQueueSettings()).defaultCaption)
     const meta = metaConfig()
     const [items, settings, lastTickAt, queueBytes] = await Promise.all([
       listQueue(),
@@ -97,7 +105,8 @@ export async function addQueueFiles(
         caption: "",
       }
     })
-    await insertQueueItems(rows)
+    const { defaultCaption } = await readQueueSettings()
+    await insertQueueItems(rows.map((row) => ({ ...row, caption: defaultCaption })))
     await rescheduleQueue()
     return rows.length
   })
@@ -163,6 +172,7 @@ export async function saveQueueSettings(input: {
   enabled: unknown
   times: unknown
   deleteAfter: unknown
+  defaultCaption?: unknown
 }): Promise<Result<QueueSettings>> {
   return guard(async () => {
     const times = parseTimes(input.times)
@@ -170,6 +180,11 @@ export async function saveQueueSettings(input: {
     await setSetting("queue_enabled", input.enabled === false ? "off" : "on")
     await setSetting("queue_times", JSON.stringify(times))
     await setSetting("queue_delete_after", input.deleteAfter === false ? "off" : "on")
+    if (typeof input.defaultCaption === "string") {
+      const caption = input.defaultCaption.trim().slice(0, 2200)
+      await setSetting("queue_default_caption", caption)
+      await fillEmptyQueueCaptions(caption)
+    }
     await rescheduleQueue()
     return readQueueSettings()
   })
