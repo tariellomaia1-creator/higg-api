@@ -1,6 +1,6 @@
 import "server-only"
 
-import { get, put } from "@vercel/blob"
+import { get, issueSignedToken, presignUrl, put } from "@vercel/blob"
 
 /** Vercel Blob helpers that work whether the store was created public or
     private. Newer stores are often private: their URLs cannot be opened by a
@@ -85,4 +85,21 @@ export async function readFile(
       response.headers.get("content-type")?.split(";")[0]?.trim() ||
       "application/octet-stream",
   }
+}
+
+/** A URL anyone (Meta, kie.ai) can download for a limited time, without
+    copying the file. Public stores already have public URLs. */
+export async function signedReadUrl(url: string, hours = 12): Promise<string> {
+  const parsed = new URL(url)
+  if (parsed.hostname.includes(".public.")) return url
+  const pathname = decodeURIComponent(parsed.pathname.replace(/^\//, ""))
+  const validUntil = Date.now() + hours * 60 * 60 * 1000
+  const token = await issueSignedToken({ pathname, operations: ["get"], validUntil })
+  const { presignedUrl } = await presignUrl(token, {
+    operation: "get",
+    pathname,
+    validUntil,
+    access: "private",
+  })
+  return presignedUrl
 }

@@ -23,6 +23,7 @@ import {
 } from "@/daily/config"
 import type { ItemKind } from "@/daily/config"
 import { getTakenSlots, savePlanItem } from "@/daily/actions"
+import { parseBlocks } from "@/daily/blocks"
 
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -39,14 +40,6 @@ type RowState = "idle" | "working" | "done" | "error"
 
 const ACCEPTED = ["image/jpeg", "image/png", "image/webp"]
 const SEARCH_DAYS = 400
-
-/** Prompts are separated by a line with only `---`. Without one, every
-    non-empty line is its own prompt. */
-export function parseBlocks(text: string): string[] {
-  const hasSeparator = /^\s*---\s*$/m.test(text)
-  const parts = hasSeparator ? text.split(/^\s*---\s*$/m) : text.split(/\r?\n/)
-  return parts.map((part) => part.trim()).filter(Boolean)
-}
 
 /** "img2.jpg" before "img10.jpg". */
 function byFileName(a: Photo, b: Photo): number {

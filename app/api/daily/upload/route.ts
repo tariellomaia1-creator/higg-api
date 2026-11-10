@@ -8,6 +8,17 @@ import { requireSession } from "@/daily/session"
 
 const START_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"]
 const START_IMAGE_MAX_BYTES = 20 * 1024 * 1024
+/** Finished videos and images for the auto-posting queue. */
+const QUEUE_TYPES = ["video/mp4", "video/quicktime", "image/jpeg", "image/png", "image/webp"]
+const QUEUE_MAX_BYTES = 1024 * 1024 * 1024
+
+function limitsFor(pathname: string) {
+  if (pathname.startsWith("daily/start/"))
+    return { types: START_IMAGE_TYPES, maxBytes: START_IMAGE_MAX_BYTES }
+  if (pathname.startsWith("daily/queue/"))
+    return { types: QUEUE_TYPES, maxBytes: QUEUE_MAX_BYTES }
+  throw new Error("Invalid upload path.")
+}
 
 /** Why an upload cannot start, in words the planner can show. The Blob client
     reports any refused request with one generic message. */
@@ -24,8 +35,9 @@ export async function GET(): Promise<NextResponse> {
   )
 }
 
-/** Issues a short-lived presigned upload URL for one start image. The browser
-    uploads straight to Blob, so large photos skip the function body limit.
+/** Issues a short-lived presigned upload URL for one start image or one
+    queue file. The browser uploads straight to Blob, so large files skip the
+    function body limit.
     Works with both a Blob read-write token and Vercel's OIDC store link
     (BLOB_STORE_ID). Only a signed-in session gets a URL. */
 export async function POST(request: Request): Promise<NextResponse> {
@@ -48,20 +60,20 @@ export async function POST(request: Request): Promise<NextResponse> {
       body,
       request,
       getSignedToken: async (pathname) => {
-        if (!pathname.startsWith("daily/start/"))
-          throw new Error("Invalid upload path.")
+        const { types, maxBytes } = limitsFor(pathname)
         const token = await issueSignedToken({
           pathname,
           operations: ["put"],
-          allowedContentTypes: START_IMAGE_TYPES,
-          maximumSizeInBytes: START_IMAGE_MAX_BYTES,
-          validUntil: Date.now() + 10 * 60 * 1000,
+          allowedContentTypes: types,
+          maximumSizeInBytes: maxBytes,
+          // Large videos upload in parts and may take a while.
+          validUntil: Date.now() + 60 * 60 * 1000,
         })
         return {
           token,
           urlOptions: {
-            allowedContentTypes: START_IMAGE_TYPES,
-            maximumSizeInBytes: START_IMAGE_MAX_BYTES,
+            allowedContentTypes: types,
+            maximumSizeInBytes: maxBytes,
             addRandomSuffix: true,
           },
         }
