@@ -23,15 +23,19 @@ export type QueueSettings = {
   enabled: boolean
   times: string[]
   deleteAfter: boolean
+  /** Caption every uploaded file starts with; editable per file. */
+  defaultCaption: string
 }
 
-const DEFAULT_FOOTER = "სცადე უფასოდ 👉 behero.ge\n#მათემატიკა #BeHero"
+export const DEFAULT_QUEUE_CAPTION =
+  "ნუ ხარჯავ დროს იმაზე, რაც უკვე იცი. 🎯\n\nbehero.ge-ზე  მათემატიკაში მასწავლებლისა და ეროვნული გამოცდისთვის:\n🎬 საგამოცდო ტესტის ვიდეოამოხსნა\n📝 ანალოგიური ტესტები სავარჯიშოდ\n🔁 ვარჯიში მხოლოდ შენს შეცდომებზე\n🎯 ვარჯიში მხოლოდ სუსტ თემებზე\n\n🎁 მოგვწერე და სცადე უფასოდ!"
 
 export async function readQueueSettings(): Promise<QueueSettings> {
-  const [enabled, times, deleteAfter] = await Promise.all([
+  const [enabled, times, deleteAfter, defaultCaption] = await Promise.all([
     getSetting("queue_enabled"),
     getSetting("queue_times"),
     getSetting("queue_delete_after"),
+    getSetting("queue_default_caption"),
   ])
   let parsedTimes: string[] = []
   try {
@@ -43,6 +47,7 @@ export async function readQueueSettings(): Promise<QueueSettings> {
     enabled: enabled !== "off",
     times: parsedTimes.length ? parsedTimes : DEFAULT_QUEUE_TIMES,
     deleteAfter: deleteAfter !== "off",
+    defaultCaption: defaultCaption ?? DEFAULT_QUEUE_CAPTION,
   }
 }
 
@@ -74,11 +79,6 @@ async function mediaForMeta(item: QueueItem): Promise<string> {
   return uploadToKie(key, converted, "image/jpeg", `${item.id}.jpg`)
 }
 
-async function withFooter(caption: string): Promise<string> {
-  const footer = (await getSetting("caption_footer")) ?? DEFAULT_FOOTER
-  if (!footer.trim() || caption.includes(footer.trim())) return caption
-  return [caption.trim(), footer.trim()].filter(Boolean).join("\n\n")
-}
 
 /** One posting step for a queue item; deletes the file once fully posted
     when that setting is on. */
@@ -103,7 +103,7 @@ export async function advanceQueueItem(meta: MetaConfig, item: QueueItem): Promi
   const outcome = await postToMeta(meta, {
     kind: item.kind === "video" ? "video" : "poster",
     mediaUrl: media,
-    caption: await withFooter(item.caption),
+    caption: item.caption || (await readQueueSettings()).defaultCaption,
     state: { fbPostId: item.fbPostId, igContainerId: item.igContainerId, igMediaId: item.igMediaId },
     continuing,
     previousError: item.error,

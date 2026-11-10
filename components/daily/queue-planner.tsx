@@ -244,7 +244,7 @@ export function QueuePlanner() {
               <h2 className="font-heading text-lg font-semibold">caption-ები ერთად</h2>
               <p className="text-xs text-muted-foreground">
                 ჩასვი caption-ები `---`-ით გამოყოფილი. რიგში მდგომებს მიენიჭება თანმიმდევრობით (1-ლი → პირველს და ა.შ.).
-                ბოლოში „სცადე უფასოდ 👉 behero.ge…“ გამოქვეყნებისას თავისით მიემატება.
+                ცარიელ ველს გამოქვეყნებისას ნაგულისხმევი caption ჩაენაცვლება.
               </p>
               <textarea
                 id="bulk-captions"
@@ -391,11 +391,12 @@ function SettingsPanel({
   const [enabled, setEnabled] = useState(view.settings.enabled)
   const [times, setTimes] = useState(view.settings.times.join(", "))
   const [deleteAfter, setDeleteAfter] = useState(view.settings.deleteAfter)
+  const [defaultCaption, setDefaultCaption] = useState(view.settings.defaultCaption)
   const [state, setState] = useState<string | null>(null)
 
   async function save() {
     setState("…")
-    const result = await saveQueueSettings({ enabled, times, deleteAfter })
+    const result = await saveQueueSettings({ enabled, times, deleteAfter, defaultCaption })
     if (result.ok) {
       setTimes(result.data.times.join(", "))
       setState("შენახულია ✓ განრიგი განახლდა")
@@ -433,6 +434,19 @@ function SettingsPanel({
           onChange={(event) => setDeleteAfter(event.target.checked)}
         />
         გამოქვეყნების შემდეგ ფაილი წაიშალოს საცავიდან (ადგილის დასაზოგად)
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className="text-xs text-muted-foreground">
+          ნაგულისხმევი caption: ყველა ატვირთულ ფაილს თავისით მიენიჭება (ცალკეულზე შეგიძლია შეცვალო)
+        </span>
+        <textarea
+          id="queue-default-caption"
+          value={defaultCaption}
+          onChange={(event) => setDefaultCaption(event.target.value)}
+          rows={8}
+          maxLength={2200}
+          className="resize-y rounded-lg border border-input bg-input/30 px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+        />
       </label>
       <div className="flex items-center gap-3">
         <Button onClick={save} disabled={state === "…"}>
@@ -511,7 +525,7 @@ function QueueRow({
           disabled={!editable}
           rows={3}
           maxLength={2200}
-          placeholder="Caption… (ბოლოში „სცადე უფასოდ 👉 behero.ge…“ თავისით მიემატება)"
+          placeholder="Caption… (ცარიელზე ნაგულისხმევი caption გამოქვეყნდება)"
           className="resize-y rounded-lg border border-input bg-input/30 px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         />
 
