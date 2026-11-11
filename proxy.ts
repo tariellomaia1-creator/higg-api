@@ -8,7 +8,14 @@ import {
   resolveDeviceId,
 } from "./generation/device"
 
+/** Pages anyone may open without the site password: the legal pages TikTok
+    links to, and TikTok's URL-prefix verification files under /tiktok/. */
+function isPublicPath(pathname: string): boolean {
+  return pathname === "/terms" || pathname === "/privacy" || pathname.startsWith("/tiktok/")
+}
+
 export async function proxy(request: NextRequest) {
+  if (isPublicPath(request.nextUrl.pathname)) return NextResponse.next()
   const isLogin = request.nextUrl.pathname === "/login"
   const signedIn = await isValidSession(
     request.cookies.get(SESSION_COOKIE)?.value
