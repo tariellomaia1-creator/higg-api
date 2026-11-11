@@ -519,7 +519,7 @@ function queueRows(result: unknown): QueueItem[] {
 export async function listQueue(): Promise<QueueItem[]> {
   const sql = await db()
   const open = queueRows(
-    await sql`SELECT * FROM post_queue WHERE status <> 'published' ORDER BY position`
+    await sql`SELECT * FROM post_queue WHERE status <> 'published' ORDER BY scheduled_at NULLS LAST, position`
   )
   const done = queueRows(
     await sql`SELECT * FROM post_queue WHERE status = 'published' ORDER BY published_at DESC NULLS LAST LIMIT 60`

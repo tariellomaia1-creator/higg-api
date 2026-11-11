@@ -17,7 +17,14 @@ import type { QueueItem, QueueStatus } from "./db"
 import { kieApiKey, uploadToKie } from "./kie"
 import type { MetaConfig } from "./meta"
 import { postToMeta } from "./publish"
-import { DEFAULT_QUEUE_TIMES, nextSlots, parseTimes } from "./queue-schedule"
+import {
+  DEFAULT_QUEUE_TIMES,
+  DEFAULT_SLOT_KINDS,
+  assignSlots,
+  parseSlotKinds,
+  parseTimes,
+} from "./queue-schedule"
+import type { SlotKind } from "./queue-schedule"
 
 export type QueueSettings = {
   enabled: boolean
@@ -25,18 +32,27 @@ export type QueueSettings = {
   deleteAfter: boolean
   /** Caption every uploaded file starts with; editable per file. */
   defaultCaption: string
+  /** Which kind of file each time posts. */
+  slotKinds: Record<string, SlotKind>
 }
 
 export const DEFAULT_QUEUE_CAPTION =
   "ნუ ხარჯავ დროს იმაზე, რაც უკვე იცი. 🎯\n\nbehero.ge-ზე  მათემატიკაში მასწავლებლისა და ეროვნული გამოცდისთვის:\n🎬 საგამოცდო ტესტის ვიდეოამოხსნა\n📝 ანალოგიური ტესტები სავარჯიშოდ\n🔁 ვარჯიში მხოლოდ შენს შეცდომებზე\n🎯 ვარჯიში მხოლოდ სუსტ თემებზე\n\n🎁 მოგვწერე და სცადე უფასოდ!"
 
 export async function readQueueSettings(): Promise<QueueSettings> {
-  const [enabled, times, deleteAfter, defaultCaption] = await Promise.all([
+  const [enabled, times, deleteAfter, defaultCaption, slotKinds] = await Promise.all([
     getSetting("queue_enabled"),
     getSetting("queue_times"),
     getSetting("queue_delete_after"),
     getSetting("queue_default_caption"),
+    getSetting("queue_slot_kinds"),
   ])
+  let parsedKinds: Record<string, SlotKind> = DEFAULT_SLOT_KINDS
+  try {
+    if (slotKinds) parsedKinds = parseSlotKinds(JSON.parse(slotKinds))
+  } catch {
+    parsedKinds = DEFAULT_SLOT_KINDS
+  }
   let parsedTimes: string[] = []
   try {
     parsedTimes = parseTimes(times ? JSON.parse(times) : DEFAULT_QUEUE_TIMES)
@@ -48,17 +64,21 @@ export async function readQueueSettings(): Promise<QueueSettings> {
     times: parsedTimes.length ? parsedTimes : DEFAULT_QUEUE_TIMES,
     deleteAfter: deleteAfter !== "off",
     defaultCaption: defaultCaption ?? DEFAULT_QUEUE_CAPTION,
+    slotKinds: parsedKinds,
   }
 }
 
-/** Gives every waiting item the next free posting time, in queue order,
-    starting just after now. Called after any change to the queue. */
+/** Gives every waiting item a posting time: videos to video slots, images
+    to image slots, in queue order, starting just after now. Called after any
+    change to the queue. */
 export async function rescheduleQueue(now = new Date()): Promise<void> {
   const settings = await readQueueSettings()
   const waiting = await listQueuedInOrder()
-  const slots = nextSlots(new Date(now.getTime() + 60_000), settings.times, waiting.length)
-  for (const [index, item] of waiting.entries())
-    if (item.scheduledAt !== (slots[index] ?? null)) await setQueueSchedule(item.id, slots[index] ?? null)
+  const plan = assignSlots(waiting, new Date(now.getTime() + 60_000), settings.times, settings.slotKinds)
+  for (const item of waiting) {
+    const at = plan.get(item.id) ?? null
+    if (item.scheduledAt !== at) await setQueueSchedule(item.id, at)
+  }
 }
 
 function message(caught: unknown): string {
