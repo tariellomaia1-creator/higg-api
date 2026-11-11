@@ -34,6 +34,8 @@ import {
   saveQueueTargets,
 } from "@/daily/queue-actions"
 import type { QueueView } from "@/daily/queue-actions"
+import { kindAt, parseTimes } from "@/daily/queue-schedule"
+import type { SlotKind } from "@/daily/queue-schedule"
 
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -392,11 +394,14 @@ function SettingsPanel({
   const [times, setTimes] = useState(view.settings.times.join(", "))
   const [deleteAfter, setDeleteAfter] = useState(view.settings.deleteAfter)
   const [defaultCaption, setDefaultCaption] = useState(view.settings.defaultCaption)
+  const [slotKinds, setSlotKinds] = useState<Record<string, SlotKind>>(view.settings.slotKinds)
+  const parsedTimes = parseTimes(times)
   const [state, setState] = useState<string | null>(null)
 
   async function save() {
     setState("…")
-    const result = await saveQueueSettings({ enabled, times, deleteAfter, defaultCaption })
+    const kinds = Object.fromEntries(parsedTimes.map((time) => [time, kindAt(time, slotKinds)]))
+    const result = await saveQueueSettings({ enabled, times, deleteAfter, defaultCaption, slotKinds: kinds })
     if (result.ok) {
       setTimes(result.data.times.join(", "))
       setState("შენახულია ✓ განრიგი განახლდა")
@@ -426,6 +431,32 @@ function SettingsPanel({
           placeholder="10:00, 13:00, 17:00, 21:00, 23:00"
         />
       </label>
+      {parsedTimes.length ? (
+        <div className="flex flex-col gap-1">
+          <span className="text-xs text-muted-foreground">
+            რა გამოქვეყნდეს თითო საათზე (თუ ერთი ტიპი გათავდა, მის საათებს მეორე დაიკავებს)
+          </span>
+          <div className="flex flex-wrap gap-2">
+            {parsedTimes.map((time) => (
+              <label key={time} className="flex items-center gap-1.5 rounded-lg border border-border px-2 py-1">
+                <span className="tabular-nums">{time}</span>
+                <select
+                  id={`slot-kind-${time}`}
+                  value={kindAt(time, slotKinds)}
+                  onChange={(event) =>
+                    setSlotKinds((current) => ({ ...current, [time]: event.target.value as SlotKind }))
+                  }
+                  className="h-7 rounded-md border border-input bg-input/30 px-1 text-xs"
+                >
+                  <option value="video">ვიდეო</option>
+                  <option value="image">ფოტო</option>
+                  <option value="any">ნებისმიერი</option>
+                </select>
+              </label>
+            ))}
+          </div>
+        </div>
+      ) : null}
       <label className="flex items-center gap-2">
         <input
           id="queue-delete-after"

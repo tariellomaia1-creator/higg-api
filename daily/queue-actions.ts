@@ -23,7 +23,7 @@ import { storageLimitBytes } from "./config"
 import { metaConfig } from "./meta"
 import { advanceQueueItem, readQueueSettings, rescheduleQueue } from "./queue"
 import type { QueueSettings } from "./queue"
-import { parseTimes } from "./queue-schedule"
+import { parseSlotKinds, parseTimes } from "./queue-schedule"
 import { requireSession } from "./session"
 
 type Result<T> = { ok: true; data: T } | { ok: false; error: string }
@@ -173,6 +173,7 @@ export async function saveQueueSettings(input: {
   times: unknown
   deleteAfter: unknown
   defaultCaption?: unknown
+  slotKinds?: unknown
 }): Promise<Result<QueueSettings>> {
   return guard(async () => {
     const times = parseTimes(input.times)
@@ -180,6 +181,8 @@ export async function saveQueueSettings(input: {
     await setSetting("queue_enabled", input.enabled === false ? "off" : "on")
     await setSetting("queue_times", JSON.stringify(times))
     await setSetting("queue_delete_after", input.deleteAfter === false ? "off" : "on")
+    if (input.slotKinds !== undefined)
+      await setSetting("queue_slot_kinds", JSON.stringify(parseSlotKinds(input.slotKinds)))
     if (typeof input.defaultCaption === "string") {
       const caption = input.defaultCaption.trim().slice(0, 2200)
       await setSetting("queue_default_caption", caption)
