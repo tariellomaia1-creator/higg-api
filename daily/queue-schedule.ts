@@ -58,6 +58,25 @@ export const DEFAULT_SLOT_KINDS: Record<string, SlotKind> = {
   "23:00": "video",
 }
 
+/** Instagram's own queue: 10 posts a day, every 90 minutes from 09:00,
+    8 Reels and 2 photos. */
+export const DEFAULT_IG_TIMES = [
+  "09:00",
+  "10:30",
+  "12:00",
+  "13:30",
+  "15:00",
+  "16:30",
+  "18:00",
+  "19:30",
+  "21:00",
+  "22:30",
+]
+
+export const DEFAULT_IG_SLOT_KINDS: Record<string, SlotKind> = Object.fromEntries(
+  DEFAULT_IG_TIMES.map((time) => [time, time === "12:00" || time === "19:30" ? "image" : "video"])
+)
+
 export function parseSlotKinds(value: unknown): Record<string, SlotKind> {
   const data = value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
   const out: Record<string, SlotKind> = {}

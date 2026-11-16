@@ -19,7 +19,7 @@ import {
 import Link from "next/link"
 import { useCallback, useEffect, useRef, useState } from "react"
 
-import type { QueueItem } from "@/daily/db"
+import type { QueueChannel, QueueItem } from "@/daily/db"
 import {
   addQueueFiles,
   applyQueueCaptions,
@@ -31,7 +31,6 @@ import {
   retryQueueItem,
   saveQueueCaption,
   saveQueueSettings,
-  saveQueueTargets,
 } from "@/daily/queue-actions"
 import type { QueueView } from "@/daily/queue-actions"
 import { kindAt, parseTimes } from "@/daily/queue-schedule"
@@ -81,7 +80,21 @@ function byName(a: File, b: File): number {
   return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" })
 }
 
-export function QueuePlanner() {
+const CHANNELS: Record<QueueChannel, { label: string; href: string; intro: string }> = {
+  fb: {
+    label: "Facebook",
+    href: "/queue",
+    intro: "ატვირთე მზა ვიდეოები და სურათები და ისინი რიგ-რიგობით გამოქვეყნდება Facebook გვერდზე, დღის დაყენებულ საათებში.",
+  },
+  ig: {
+    label: "Instagram",
+    href: "/queue/instagram",
+    intro:
+      "Instagram-ის ცალკე რიგი, თავისი საათებით: ვიდეოები Reels-ად, სურათები ფოტო-პოსტად. Facebook-ზე აქედან არაფერი გავა.",
+  },
+}
+
+export function QueuePlanner({ channel }: { channel: QueueChannel }) {
   const [view, setView] = useState<QueueView | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -90,16 +103,16 @@ export function QueuePlanner() {
   const fileInput = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
-    const result = await getQueueView()
+    const result = await getQueueView(channel)
     if (result.ok) {
       setView(result.data)
       setError(null)
     } else setError(result.error)
-  }, [])
+  }, [channel])
 
   useEffect(() => {
     let live = true
-    void getQueueView().then((result) => {
+    void getQueueView(channel).then((result) => {
       if (!live) return
       if (result.ok) setView(result.data)
       else setError(result.error)
@@ -107,7 +120,7 @@ export function QueuePlanner() {
     return () => {
       live = false
     }
-  }, [])
+  }, [channel])
 
   const publishing = view?.items.some((item) => item.status === "publishing")
   useEffect(() => {
@@ -153,7 +166,7 @@ export function QueuePlanner() {
       }
     }
     if (uploaded.length) {
-      const result = await addQueueFiles(uploaded)
+      const result = await addQueueFiles(channel, uploaded)
       if (!result.ok) setError(result.error)
       else setNotice(`რიგს დაემატა ${result.data} ფაილი.`)
     }
@@ -180,10 +193,22 @@ export function QueuePlanner() {
           <ArrowLeft className="size-4" /> დღის გეგმა
         </Link>
         <h1 className="font-heading text-2xl font-semibold">Auto posting</h1>
-        <p className="text-sm text-muted-foreground">
-          ატვირთე მზა ვიდეოები და სურათები, დაუწერე caption და ისინი რიგ-რიგობით გამოქვეყნდება Facebook-ზე და
-          Instagram-ზე, დღის დაყენებულ საათებში.
-        </p>
+        <nav aria-label="არხი" className="mt-3 flex gap-1 rounded-xl bg-muted p-1 sm:w-fit">
+          {(Object.keys(CHANNELS) as QueueChannel[]).map((key) => (
+            <Link
+              key={key}
+              href={CHANNELS[key].href}
+              aria-current={key === channel ? "page" : undefined}
+              className={cn(
+                "flex-1 rounded-lg px-4 py-1.5 text-center text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:flex-none",
+                key === channel && "bg-background text-foreground shadow-sm"
+              )}
+            >
+              {CHANNELS[key].label}
+            </Link>
+          ))}
+        </nav>
+        <p className="mt-3 text-sm text-muted-foreground">{CHANNELS[channel].intro}</p>
       </div>
 
       {error ? (
@@ -260,7 +285,7 @@ export function QueuePlanner() {
                 <Button
                   onClick={() =>
                     void act(async () => {
-                      const result = await applyQueueCaptions(bulk, true)
+                      const result = await applyQueueCaptions(channel, bulk, true)
                       if (result.ok) setNotice(`caption მიენიჭა ${result.data} ფაილს (ცარიელებს).`)
                       return result
                     })
@@ -273,7 +298,7 @@ export function QueuePlanner() {
                   variant="secondary"
                   onClick={() =>
                     void act(async () => {
-                      const result = await applyQueueCaptions(bulk, false)
+                      const result = await applyQueueCaptions(channel, bulk, false)
                       if (result.ok) setNotice(`caption მიენიჭა ${result.data} ფაილს.`)
                       return result
                     })
@@ -300,7 +325,7 @@ export function QueuePlanner() {
                     item={item}
                     index={index}
                     count={waiting.length}
-                    metaConnected={view.metaConnected}
+                    canPublish={channel === "ig" ? view.instagramConnected : view.metaConnected}
                     onAct={act}
                   />
                 ))}
@@ -317,7 +342,7 @@ export function QueuePlanner() {
                     <CheckCircle2 className="size-4 text-primary" />
                     <span className="min-w-0 truncate">{item.fileName || "ფაილი"}</span>
                     <span className="text-xs text-muted-foreground">{formatWhen(item.publishedAt)}</span>
-                    {item.fbPostId ? (
+                    {item.channel === "fb" && item.fbPostId ? (
                       <a
                         href={`https://www.facebook.com/${item.fbPostId}`}
                         target="_blank"
@@ -327,7 +352,7 @@ export function QueuePlanner() {
                         Facebook
                       </a>
                     ) : null}
-                    {item.igMediaId ? <span className="text-xs text-muted-foreground">Instagram ✓</span> : null}
+                    {item.channel === "ig" && item.igMediaId ? <span className="text-xs text-muted-foreground">Instagram ✓</span> : null}
                   </li>
                 ))}
               </ul>
@@ -345,14 +370,17 @@ export function QueuePlanner() {
 
 function StatusStrip({ view, cronOk, lastTick }: { view: QueueView; cronOk: boolean; lastTick: number | null }) {
   const share = view.storage.limit ? view.storage.queue / view.storage.limit : 0
+  const connected = view.channel === "ig" ? view.instagramConnected : view.metaConnected
   return (
     <section className="grid gap-3 rounded-2xl border border-border bg-card p-4 text-sm sm:grid-cols-3">
       <div>
-        <p className="text-xs text-muted-foreground">Facebook / Instagram</p>
-        <p className={cn("font-medium", !view.metaConnected && "text-destructive")}>
-          {view.metaConnected
-            ? `დაკავშირებულია${view.instagramConnected ? " (FB + IG)" : " (მხოლოდ FB)"}`
-            : "არ არის დაკავშირებული (META_… ცვლადები)"}
+        <p className="text-xs text-muted-foreground">{CHANNELS[view.channel].label}</p>
+        <p className={cn("font-medium", !connected && "text-destructive")}>
+          {connected
+            ? "დაკავშირებულია"
+            : view.channel === "ig"
+              ? "არ არის დაკავშირებული (META_IG_USER_ID)"
+              : "არ არის დაკავშირებული (META_… ცვლადები)"}
         </p>
       </div>
       <div>
@@ -372,7 +400,7 @@ function StatusStrip({ view, cronOk, lastTick }: { view: QueueView; cronOk: bool
         ) : null}
       </div>
       <div>
-        <p className="text-xs text-muted-foreground">რიგის ფაილები საცავში</p>
+        <p className="text-xs text-muted-foreground">რიგის ფაილები საცავში (ორივე არხი)</p>
         <p className={cn("font-medium", share > 0.8 && "text-destructive")}>
           {formatBytes(view.storage.queue)} / {formatBytes(view.storage.limit)}
         </p>
@@ -401,7 +429,7 @@ function SettingsPanel({
   async function save() {
     setState("…")
     const kinds = Object.fromEntries(parsedTimes.map((time) => [time, kindAt(time, slotKinds)]))
-    const result = await saveQueueSettings({ enabled, times, deleteAfter, defaultCaption, slotKinds: kinds })
+    const result = await saveQueueSettings(view.channel, { enabled, times, deleteAfter, defaultCaption, slotKinds: kinds })
     if (result.ok) {
       setTimes(result.data.times.join(", "))
       setState("შენახულია ✓ განრიგი განახლდა")
@@ -428,7 +456,7 @@ function SettingsPanel({
           value={times}
           onChange={(event) => setTimes(event.target.value)}
           className="h-9 rounded-lg border border-input bg-input/30 px-3 text-sm"
-          placeholder="10:00, 13:00, 17:00, 21:00, 23:00"
+          placeholder={view.channel === "ig" ? "09:00, 10:30, 12:00, …" : "10:00, 13:00, 17:00, 21:00, 23:00"}
         />
       </label>
       {parsedTimes.length ? (
@@ -493,13 +521,13 @@ function QueueRow({
   item,
   index,
   count,
-  metaConnected,
+  canPublish,
   onAct,
 }: {
   item: QueueItem
   index: number
   count: number
-  metaConnected: boolean
+  canPublish: boolean
   onAct: (run: () => Promise<{ ok: boolean; error?: string }>) => Promise<void>
 }) {
   const [caption, setCaption] = useState(item.caption)
@@ -560,27 +588,6 @@ function QueueRow({
           className="resize-y rounded-lg border border-input bg-input/30 px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
         />
 
-        <div className="flex flex-wrap items-center gap-3 text-sm">
-          <label className="flex items-center gap-1.5">
-            <input
-              type="checkbox"
-              checked={item.toFacebook}
-              disabled={!editable || busy}
-              onChange={(event) => void run(() => saveQueueTargets(item.id, event.target.checked, item.toInstagram))}
-            />
-            Facebook
-          </label>
-          <label className="flex items-center gap-1.5">
-            <input
-              type="checkbox"
-              checked={item.toInstagram}
-              disabled={!editable || busy}
-              onChange={(event) => void run(() => saveQueueTargets(item.id, item.toFacebook, event.target.checked))}
-            />
-            Instagram
-          </label>
-        </div>
-
         {item.error ? (
           <p className="flex items-start gap-1.5 rounded-lg bg-destructive/15 px-3 py-2 text-xs text-destructive">
             <AlertTriangle className="mt-0.5 size-3.5 shrink-0" /> {item.error}
@@ -596,7 +603,7 @@ function QueueRow({
               <Button variant="ghost" size="icon" aria-label="უკან" disabled={busy || index === count - 1} onClick={() => void run(() => moveQueueItem(item.id, "down"))}>
                 <ArrowDown />
               </Button>
-              {metaConnected ? (
+              {canPublish ? (
                 confirmPost ? (
                   <>
                     <Button

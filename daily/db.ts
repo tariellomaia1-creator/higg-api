@@ -119,6 +119,7 @@ async function createSchema(sql: Sql): Promise<void> {
       updated_at timestamptz NOT NULL DEFAULT now(),
       UNIQUE (day, kind, slot)
     )`
+  await sql`ALTER TABLE post_queue ADD COLUMN IF NOT EXISTS channel text NOT NULL DEFAULT 'fb'`
   await sql`ALTER TABLE daily_items ADD COLUMN IF NOT EXISTS credits_used numeric NOT NULL DEFAULT 0`
   await sql`ALTER TABLE daily_items ADD COLUMN IF NOT EXISTS submitted_at timestamptz`
   await sql`ALTER TABLE daily_items ADD COLUMN IF NOT EXISTS completed_at timestamptz`
@@ -467,8 +468,13 @@ export async function updateCaption(id: string, caption: string): Promise<void> 
 
 export type QueueStatus = "queued" | "publishing" | "published" | "partial" | "failed"
 
+/** Each channel is its own queue with its own times: "fb" posts to the
+    Facebook Page only, "ig" to Instagram only. */
+export type QueueChannel = "fb" | "ig"
+
 export type QueueItem = {
   id: string
+  channel: QueueChannel
   position: number
   kind: "video" | "image"
   fileName: string
@@ -490,6 +496,7 @@ export type QueueItem = {
 function toQueueItem(row: Record<string, unknown>): QueueItem {
   return {
     id: String(row.id),
+    channel: row.channel === "ig" ? "ig" : "fb",
     position: num(row.position),
     kind: row.kind === "image" ? "image" : "video",
     fileName: str(row.file_name) ?? "",
@@ -516,13 +523,15 @@ function queueRows(result: unknown): QueueItem[] {
 }
 
 /** Waiting and in-progress items in order, then the latest posted ones. */
-export async function listQueue(): Promise<QueueItem[]> {
+export async function listQueue(channel: QueueChannel): Promise<QueueItem[]> {
   const sql = await db()
   const open = queueRows(
-    await sql`SELECT * FROM post_queue WHERE status <> 'published' ORDER BY scheduled_at NULLS LAST, position`
+    await sql`SELECT * FROM post_queue WHERE channel = ${channel} AND status <> 'published'
+      ORDER BY scheduled_at NULLS LAST, position`
   )
   const done = queueRows(
-    await sql`SELECT * FROM post_queue WHERE status = 'published' ORDER BY published_at DESC NULLS LAST LIMIT 60`
+    await sql`SELECT * FROM post_queue WHERE channel = ${channel} AND status = 'published'
+      ORDER BY published_at DESC NULLS LAST LIMIT 60`
   )
   return [...open, ...done]
 }
@@ -533,6 +542,7 @@ export async function getQueueItem(id: string): Promise<QueueItem | null> {
 }
 
 export async function insertQueueItems(
+  channel: QueueChannel,
   items: Array<{
     kind: "video" | "image"
     fileName: string
@@ -547,19 +557,16 @@ export async function insertQueueItems(
   let position = num(Array.isArray(result) ? (result[0] as Record<string, unknown>)?.top : 0)
   for (const item of items) {
     position += 1
-    await sql`INSERT INTO post_queue (position, kind, file_name, media_url, media_type, bytes, caption)
-      VALUES (${position}, ${item.kind}, ${item.fileName}, ${item.mediaUrl}, ${item.mediaType}, ${item.bytes}, ${item.caption})`
+    await sql`INSERT INTO post_queue (channel, position, kind, file_name, media_url, media_type, bytes, caption,
+        to_facebook, to_instagram)
+      VALUES (${channel}, ${position}, ${item.kind}, ${item.fileName}, ${item.mediaUrl}, ${item.mediaType},
+        ${item.bytes}, ${item.caption}, ${channel === "fb"}, ${channel === "ig"})`
   }
 }
 
 export async function setQueueCaption(id: string, caption: string): Promise<void> {
   const sql = await db()
   await sql`UPDATE post_queue SET caption = ${caption}, updated_at = now() WHERE id = ${id}`
-}
-
-export async function setQueueTargets(id: string, facebook: boolean, instagram: boolean): Promise<void> {
-  const sql = await db()
-  await sql`UPDATE post_queue SET to_facebook = ${facebook}, to_instagram = ${instagram}, updated_at = now() WHERE id = ${id}`
 }
 
 export async function setQueuePosition(id: string, position: number): Promise<void> {
@@ -609,24 +616,25 @@ export async function deleteQueueItem(id: string): Promise<QueueItem | null> {
   return queueRows(await sql`DELETE FROM post_queue WHERE id = ${id} RETURNING *`)[0] ?? null
 }
 
-export async function listQueuedInOrder(): Promise<QueueItem[]> {
+export async function listQueuedInOrder(channel: QueueChannel): Promise<QueueItem[]> {
   const sql = await db()
   return queueRows(
-    await sql`SELECT * FROM post_queue WHERE status = 'queued' AND media_url IS NOT NULL ORDER BY position`
+    await sql`SELECT * FROM post_queue WHERE channel = ${channel} AND status = 'queued' AND media_url IS NOT NULL
+      ORDER BY position`
   )
 }
 
-export async function listQueuePublishing(): Promise<QueueItem[]> {
+export async function listQueuePublishing(channel: QueueChannel): Promise<QueueItem[]> {
   const sql = await db()
-  return queueRows(await sql`SELECT * FROM post_queue WHERE status = 'publishing'`)
+  return queueRows(await sql`SELECT * FROM post_queue WHERE channel = ${channel} AND status = 'publishing'`)
 }
 
 /** The earliest queued item whose time has come. */
-export async function nextDueQueueItem(nowIso: string): Promise<QueueItem | null> {
+export async function nextDueQueueItem(channel: QueueChannel, nowIso: string): Promise<QueueItem | null> {
   const sql = await db()
   return (
     queueRows(await sql`SELECT * FROM post_queue
-      WHERE status = 'queued' AND media_url IS NOT NULL AND scheduled_at IS NOT NULL AND scheduled_at <= ${nowIso}
+      WHERE channel = ${channel} AND status = 'queued' AND media_url IS NOT NULL AND scheduled_at IS NOT NULL AND scheduled_at <= ${nowIso}
       ORDER BY scheduled_at, position LIMIT 1`)[0] ?? null
   )
 }
