@@ -10,6 +10,7 @@ import {
   LogOut,
   Play,
   Trash2,
+  Camera,
 } from "lucide-react"
 import Link from "next/link"
 import { useCallback, useEffect, useRef, useState } from "react"
@@ -231,6 +232,12 @@ export function DailyPlanner() {
             className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-2.5 text-sm hover:bg-muted"
           >
             <Megaphone className="size-4" /> Auto posting
+          </Link>
+          <Link
+            href="/queue/instagram"
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-2.5 text-sm hover:bg-muted"
+          >
+            <Camera className="size-4" /> Instagram
           </Link>
           <Link
             href="/batch"

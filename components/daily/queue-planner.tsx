@@ -3,6 +3,7 @@
 import { uploadPresigned } from "@vercel/blob/client"
 import {
   AlertTriangle,
+  CalendarClock,
   ArrowDown,
   ArrowLeft,
   ArrowUp,
@@ -26,10 +27,12 @@ import {
   getQueueView,
   moveQueueItem,
   publishQueueItemNow,
+  redistributeQueueCaptions,
   refreshQueuePublishing,
   removeQueueItem,
   retryQueueItem,
   saveQueueCaption,
+  saveQueueCaptionVariants,
   saveQueueSettings,
 } from "@/daily/queue-actions"
 import type { QueueView } from "@/daily/queue-actions"
@@ -218,6 +221,7 @@ export function QueuePlanner({ channel }: { channel: QueueChannel }) {
 
       {view ? (
         <>
+          <SupplyPanel items={waiting} />
           <StatusStrip view={view} cronOk={cronOk} lastTick={lastTick} />
           <SettingsPanel view={view} onSaved={load} onError={setError} />
 
@@ -265,6 +269,15 @@ export function QueuePlanner({ channel }: { channel: QueueChannel }) {
               </div>
             ) : null}
           </section>
+
+          <CaptionVariantsPanel
+            key={view.captionVariants}
+            channel={channel}
+            initial={view.captionVariants}
+            waitingCount={waiting.length}
+            onAct={act}
+            onNotice={setNotice}
+          />
 
           {waiting.length ? (
             <section className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4">
@@ -365,6 +378,135 @@ export function QueuePlanner({ channel }: { channel: QueueChannel }) {
         </p>
       ) : null}
     </main>
+  )
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+function formatDay(ms: number): string {
+  return new Intl.DateTimeFormat("ka-GE", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    timeZone: "Asia/Tbilisi",
+  }).format(new Date(ms))
+}
+
+/** How long the uploaded files last at the current times, and by when to
+    upload more (a day before the last one goes out). */
+function SupplyPanel({ items }: { items: QueueItem[] }) {
+  const queued = items.filter((item) => item.status === "queued" && item.scheduledAt)
+  const videos = queued.filter((item) => item.kind === "video").length
+  const images = queued.length - videos
+  const [now] = useState(() => Date.now())
+  if (queued.length === 0)
+    return (
+      <section role="status" className="flex items-start gap-3 rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-sm">
+        <CalendarClock className="mt-0.5 size-5 shrink-0 text-destructive" />
+        <div>
+          <p className="font-medium text-destructive">მასალა არ არის: რიგი ცარიელია</p>
+          <p className="text-muted-foreground">ატვირთე ახალი ვიდეოები/ფოტოები ახლავე, თორემ პოსტები შეჩერდება.</p>
+        </div>
+      </section>
+    )
+  const last = Math.max(...queued.map((item) => Date.parse(item.scheduledAt!)))
+  const days = Math.max(1, Math.ceil((last - now) / DAY_MS))
+  const uploadBy = last - DAY_MS
+  const urgent = uploadBy - now < DAY_MS
+  return (
+    <section
+      role="status"
+      className={cn(
+        "flex items-start gap-3 rounded-2xl border p-4 text-sm",
+        urgent ? "border-destructive/40 bg-destructive/10" : "border-border bg-card"
+      )}
+    >
+      <CalendarClock className={cn("mt-0.5 size-5 shrink-0", urgent ? "text-destructive" : "text-primary")} />
+      <div className="flex flex-col gap-0.5">
+        <p className="font-medium">
+          მასალა ეყოფა <span className="tabular-nums">{days}</span> დღეს · {queued.length} პოსტი ({videos} ვიდეო,{" "}
+          {images} ფოტო)
+        </p>
+        <p className="text-muted-foreground">ბოლო პოსტი: {formatWhen(new Date(last).toISOString())}</p>
+        <p className={cn(urgent ? "font-medium text-destructive" : "text-foreground")}>
+          {urgent ? "ახალი მასალა ატვირთე დღესვე." : `ახალი მასალა ატვირთე ${formatDay(uploadBy)}-მდე.`}
+        </p>
+      </div>
+    </section>
+  )
+}
+
+function CaptionVariantsPanel({
+  channel,
+  initial,
+  waitingCount,
+  onAct,
+  onNotice,
+}: {
+  channel: QueueChannel
+  initial: string
+  waitingCount: number
+  onAct: (run: () => Promise<{ ok: boolean; error?: string }>) => Promise<void>
+  onNotice: (message: string) => void
+}) {
+  const [text, setText] = useState(initial)
+  const [busy, setBusy] = useState(false)
+  const count = text.split(/^\s*---\s*$/m).filter((block) => block.trim()).length
+
+  async function run(task: () => Promise<{ ok: boolean; error?: string }>) {
+    setBusy(true)
+    await onAct(task)
+    setBusy(false)
+  }
+
+  return (
+    <details className="rounded-2xl border border-border bg-card p-4 text-sm">
+      <summary className="cursor-pointer font-heading text-lg font-semibold">
+        caption-ის ვარიანტები · {count}
+      </summary>
+      <div className="mt-3 flex flex-col gap-3">
+        <p className="text-xs text-muted-foreground">
+          ყოველ ატვირთულ ფაილს რიგრიგობით ერთ-ერთი ვარიანტი მიენიჭება, ასე რომ მეზობელი პოსტები არ განმეორდება.
+          ვარიანტები გამოყავი `---` ხაზით. სია ორივე არხისთვის საერთოა (Instagram სიის შუიდან იწყებს).
+        </p>
+        <textarea
+          id="caption-variants"
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          rows={14}
+          className="resize-y rounded-lg border border-input bg-input/30 px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+        />
+        <div className="flex flex-wrap gap-2">
+          <Button
+            disabled={busy || count === 0}
+            onClick={() =>
+              void run(async () => {
+                const result = await saveQueueCaptionVariants(text)
+                if (result.ok) onNotice(`შენახულია ${result.data} ვარიანტი.`)
+                return result
+              })
+            }
+          >
+            ვარიანტების შენახვა
+          </Button>
+          {waitingCount ? (
+            <Button
+              variant="secondary"
+              disabled={busy}
+              onClick={() =>
+                void run(async () => {
+                  const result = await redistributeQueueCaptions(channel, false)
+                  if (result.ok) onNotice(`რიგში მდგომ ${result.data} ფაილს სხვადასხვა caption მიენიჭა.`)
+                  return result
+                })
+              }
+            >
+              რიგს თავიდან განაწილება
+            </Button>
+          ) : null}
+        </div>
+      </div>
+    </details>
   )
 }
 

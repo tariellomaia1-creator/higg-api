@@ -3,7 +3,9 @@
 import { del } from "@vercel/blob"
 
 import { parseBlocks } from "./blocks"
+import { formatVariants } from "./caption-variants"
 import {
+  countQueueItems,
   deleteQueueItem,
   getQueueItem,
   getSetting,
@@ -23,7 +25,12 @@ import { metaConfig } from "./meta"
 import {
   QUEUE_CHANNELS,
   advanceQueueItem,
+  applyCaptionVariantsOnce,
   asChannel,
+  distributeCaptionVariants,
+  pickVariant,
+  readCaptionVariants,
+  saveCaptionVariants,
   queueSettingKey,
   readQueueSettings,
   rescheduleQueue,
@@ -64,6 +71,8 @@ export type QueueView = {
   metaConnected: boolean
   instagramConnected: boolean
   lastTickAt: string | null
+  /** Caption rewordings, `---`-separated, shared by both channels. */
+  captionVariants: string
   storage: { queue: number; limit: number }
 }
 
@@ -77,13 +86,15 @@ async function fillEmptyQueueCaptions(channel: QueueChannel, caption: string): P
 export async function getQueueView(channelInput: unknown): Promise<Result<QueueView>> {
   return guard(async () => {
     const channel = asChannel(channelInput)
+    await applyCaptionVariantsOnce()
     await fillEmptyQueueCaptions(channel, (await readQueueSettings(channel)).defaultCaption)
     const meta = metaConfig()
-    const [items, settings, lastTickAt, queueBytes] = await Promise.all([
+    const [items, settings, lastTickAt, queueBytes, variants] = await Promise.all([
       listQueue(channel),
       readQueueSettings(channel),
       getSetting("last_tick_at"),
       queueStorageBytes(),
+      readCaptionVariants(),
     ])
     return {
       channel,
@@ -92,6 +103,7 @@ export async function getQueueView(channelInput: unknown): Promise<Result<QueueV
       metaConnected: Boolean(meta),
       instagramConnected: Boolean(meta?.igUserId),
       lastTickAt,
+      captionVariants: formatVariants(variants),
       storage: { queue: queueBytes, limit: storageLimitBytes() },
     }
   })
@@ -116,10 +128,10 @@ export async function addQueueFiles(
         caption: "",
       }
     })
-    const { defaultCaption } = await readQueueSettings(channel)
+    const [variants, existing] = await Promise.all([readCaptionVariants(), countQueueItems(channel)])
     await insertQueueItems(
       channel,
-      rows.map((row) => ({ ...row, caption: defaultCaption }))
+      rows.map((row, index) => ({ ...row, caption: pickVariant(variants, channel, existing + index) }))
     )
     await rescheduleQueue(channel)
     return rows.length
@@ -243,4 +255,15 @@ export async function refreshQueuePublishing(): Promise<Result<null>> {
       for (const item of await listQueuePublishing(channel)) await advanceQueueItem(meta, item)
     return null
   })
+}
+
+/** Saves the caption rewordings (shared by both channels). */
+export async function saveQueueCaptionVariants(text: unknown): Promise<Result<number>> {
+  return guard(async () => (await saveCaptionVariants(typeof text === "string" ? text : "")).length)
+}
+
+/** Gives the waiting files of a channel different captions from the list,
+    in queue order. `onlyPlain` keeps captions typed by hand. */
+export async function redistributeQueueCaptions(channelInput: unknown, onlyPlain: unknown): Promise<Result<number>> {
+  return guard(() => distributeCaptionVariants(asChannel(channelInput), onlyPlain === true))
 }

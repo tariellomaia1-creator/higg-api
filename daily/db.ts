@@ -639,6 +639,19 @@ export async function nextDueQueueItem(channel: QueueChannel, nowIso: string): P
   )
 }
 
+/** Every item ever added to a channel, for caption rotation. */
+export async function countQueueItems(channel: QueueChannel): Promise<number> {
+  const sql = await db()
+  const result = await sql`SELECT COUNT(*) AS n FROM post_queue WHERE channel = ${channel}`
+  return num(Array.isArray(result) ? (result[0] as Record<string, unknown>)?.n : 0)
+}
+
+export async function countPublished(channel: QueueChannel): Promise<number> {
+  const sql = await db()
+  const result = await sql`SELECT COUNT(*) AS n FROM post_queue WHERE channel = ${channel} AND status = 'published'`
+  return num(Array.isArray(result) ? (result[0] as Record<string, unknown>)?.n : 0)
+}
+
 export async function queueStorageBytes(): Promise<number> {
   const sql = await db()
   const result = await sql`SELECT COALESCE(SUM(bytes), 0) AS used FROM post_queue`

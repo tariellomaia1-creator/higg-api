@@ -4,14 +4,18 @@ import { del } from "@vercel/blob"
 import sharp from "sharp"
 
 import { readFile, signedReadUrl } from "./blob-server"
+import { CAPTION_VARIANTS, parseVariants } from "./caption-variants"
 import {
   clearQueueMedia,
+  countPublished,
   getSetting,
   listQueuePublishing,
   listQueuedInOrder,
   nextDueQueueItem,
   saveQueuePublish,
+  setQueueCaption,
   setQueueSchedule,
+  setSetting,
 } from "./db"
 import type { QueueChannel, QueueItem, QueueStatus } from "./db"
 import { kieApiKey, uploadToKie } from "./kie"
@@ -83,6 +87,70 @@ export async function readQueueSettings(channel: QueueChannel): Promise<QueueSet
     defaultCaption: defaultCaption ?? DEFAULT_QUEUE_CAPTION,
     slotKinds: parsedKinds,
   }
+}
+
+/** Caption rewordings shared by both channels (setting "caption_variants",
+    JSON list); the built-in list until edited. */
+export async function readCaptionVariants(): Promise<string[]> {
+  const stored = await getSetting("caption_variants")
+  if (stored) {
+    try {
+      const list = JSON.parse(stored)
+      if (Array.isArray(list)) {
+        const clean = list.filter((v): v is string => typeof v === "string" && v.trim() !== "")
+        if (clean.length) return clean
+      }
+    } catch {
+      // fall through to the default list
+    }
+  }
+  return CAPTION_VARIANTS
+}
+
+export async function saveCaptionVariants(text: string): Promise<string[]> {
+  const list = parseVariants(text)
+  if (list.length === 0) throw new Error("ჩაწერე მინიმუმ ერთი caption.")
+  await setSetting("caption_variants", JSON.stringify(list))
+  return list
+}
+
+/** The n-th caption of a channel. Instagram starts further along the list,
+    so the same file posted on both channels rarely shares a caption. */
+export function pickVariant(variants: string[], channel: QueueChannel, n: number): string {
+  const offset = channel === "ig" ? Math.floor(variants.length / 2) : 0
+  return variants[(n + offset) % variants.length] ?? ""
+}
+
+/** Gives the waiting items of a channel the variants in queue order,
+    continuing the rotation after the posts already published. With
+    `onlyPlain`, touches only items that still carry the default caption or
+    none, so captions typed by hand stay. Returns how many changed. */
+export async function distributeCaptionVariants(channel: QueueChannel, onlyPlain: boolean): Promise<number> {
+  const [variants, settings, waiting, published] = await Promise.all([
+    readCaptionVariants(),
+    readQueueSettings(channel),
+    listQueuedInOrder(channel),
+    countPublished(channel),
+  ])
+  const plain = new Set(["", settings.defaultCaption.trim(), DEFAULT_QUEUE_CAPTION.trim()])
+  let changed = 0
+  for (const [index, item] of waiting.entries()) {
+    if (onlyPlain && !plain.has(item.caption.trim())) continue
+    const caption = pickVariant(variants, channel, published + index)
+    if (caption && caption !== item.caption) {
+      await setQueueCaption(item.id, caption)
+      changed++
+    }
+  }
+  return changed
+}
+
+/** One-time switch from one shared caption to rotating variants for files
+    uploaded before variants existed. */
+export async function applyCaptionVariantsOnce(): Promise<void> {
+  if (await getSetting("caption_variants_applied")) return
+  for (const channel of QUEUE_CHANNELS) await distributeCaptionVariants(channel, true)
+  await setSetting("caption_variants_applied", new Date().toISOString())
 }
 
 /** Gives every waiting item a posting time: videos to video slots, images
@@ -170,6 +238,11 @@ export async function processQueue(
   now = new Date()
 ): Promise<{ published: number; notes: string[] }> {
   const report = { published: 0, notes: [] as string[] }
+  try {
+    await applyCaptionVariantsOnce()
+  } catch (caught) {
+    report.notes.push(`Caption variants: ${message(caught)}`)
+  }
   for (const channel of QUEUE_CHANNELS) {
     if (channel === "ig" && !meta.igUserId) continue
     const part = await processChannel(meta, channel, now)
