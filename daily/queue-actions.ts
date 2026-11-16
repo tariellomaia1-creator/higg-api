@@ -15,13 +15,19 @@ import {
   resetQueueItem,
   setQueueCaption,
   setQueuePosition,
-  setQueueTargets,
   setSetting,
 } from "./db"
-import type { QueueItem } from "./db"
+import type { QueueChannel, QueueItem } from "./db"
 import { storageLimitBytes } from "./config"
 import { metaConfig } from "./meta"
-import { advanceQueueItem, readQueueSettings, rescheduleQueue } from "./queue"
+import {
+  QUEUE_CHANNELS,
+  advanceQueueItem,
+  asChannel,
+  queueSettingKey,
+  readQueueSettings,
+  rescheduleQueue,
+} from "./queue"
 import type { QueueSettings } from "./queue"
 import { parseSlotKinds, parseTimes } from "./queue-schedule"
 import { requireSession } from "./session"
@@ -52,6 +58,7 @@ function asId(value: unknown): string {
 }
 
 export type QueueView = {
+  channel: QueueChannel
   items: QueueItem[]
   settings: QueueSettings
   metaConnected: boolean
@@ -61,23 +68,25 @@ export type QueueView = {
 }
 
 /** Waiting files without a caption get the default one. */
-async function fillEmptyQueueCaptions(caption: string): Promise<void> {
+async function fillEmptyQueueCaptions(channel: QueueChannel, caption: string): Promise<void> {
   if (!caption) return
-  for (const item of await listQueuedInOrder())
+  for (const item of await listQueuedInOrder(channel))
     if (!item.caption) await setQueueCaption(item.id, caption)
 }
 
-export async function getQueueView(): Promise<Result<QueueView>> {
+export async function getQueueView(channelInput: unknown): Promise<Result<QueueView>> {
   return guard(async () => {
-    await fillEmptyQueueCaptions((await readQueueSettings()).defaultCaption)
+    const channel = asChannel(channelInput)
+    await fillEmptyQueueCaptions(channel, (await readQueueSettings(channel)).defaultCaption)
     const meta = metaConfig()
     const [items, settings, lastTickAt, queueBytes] = await Promise.all([
-      listQueue(),
-      readQueueSettings(),
+      listQueue(channel),
+      readQueueSettings(channel),
       getSetting("last_tick_at"),
       queueStorageBytes(),
     ])
     return {
+      channel,
       items,
       settings,
       metaConnected: Boolean(meta),
@@ -89,9 +98,11 @@ export async function getQueueView(): Promise<Result<QueueView>> {
 }
 
 export async function addQueueFiles(
+  channelInput: unknown,
   files: Array<{ url: unknown; mediaType: unknown; bytes: unknown; fileName: unknown }>
 ): Promise<Result<number>> {
   return guard(async () => {
+    const channel = asChannel(channelInput)
     if (!Array.isArray(files) || files.length === 0) throw new Error("No files.")
     const rows = files.map((file) => {
       if (typeof file.url !== "string" || !isBlobUrl(file.url)) throw new Error("Upload the file again.")
@@ -105,9 +116,12 @@ export async function addQueueFiles(
         caption: "",
       }
     })
-    const { defaultCaption } = await readQueueSettings()
-    await insertQueueItems(rows.map((row) => ({ ...row, caption: defaultCaption })))
-    await rescheduleQueue()
+    const { defaultCaption } = await readQueueSettings(channel)
+    await insertQueueItems(
+      channel,
+      rows.map((row) => ({ ...row, caption: defaultCaption }))
+    )
+    await rescheduleQueue(channel)
     return rows.length
   })
 }
@@ -119,17 +133,12 @@ export async function saveQueueCaption(id: unknown, caption: unknown): Promise<R
   })
 }
 
-export async function saveQueueTargets(id: unknown, facebook: unknown, instagram: unknown): Promise<Result<null>> {
-  return guard(async () => {
-    await setQueueTargets(asId(id), facebook === true, instagram === true)
-    return null
-  })
-}
-
 /** Moves a waiting item one place up or down and re-times the queue. */
 export async function moveQueueItem(id: unknown, direction: unknown): Promise<Result<null>> {
   return guard(async () => {
-    const waiting = await listQueuedInOrder()
+    const item = await getQueueItem(asId(id))
+    if (!item) return null
+    const waiting = await listQueuedInOrder(item.channel)
     const index = waiting.findIndex((item) => item.id === id)
     const target = index + (direction === "up" ? -1 : 1)
     if (index < 0 || target < 0 || target >= waiting.length) return null
@@ -137,7 +146,7 @@ export async function moveQueueItem(id: unknown, direction: unknown): Promise<Re
     const b = waiting[target]!
     await setQueuePosition(a.id, b.position)
     await setQueuePosition(b.id, a.position)
-    await rescheduleQueue()
+    await rescheduleQueue(item.channel)
     return null
   })
 }
@@ -147,16 +156,20 @@ export async function removeQueueItem(id: unknown): Promise<Result<null>> {
     const removed = await deleteQueueItem(asId(id))
     if (removed?.mediaUrl && isBlobUrl(removed.mediaUrl))
       await del(removed.mediaUrl).catch(() => undefined)
-    await rescheduleQueue()
+    if (removed) await rescheduleQueue(removed.channel)
     return null
   })
 }
 
 /** Gives the waiting items captions in queue order from `---` blocks. */
-export async function applyQueueCaptions(text: unknown, onlyEmpty: unknown): Promise<Result<number>> {
+export async function applyQueueCaptions(
+  channelInput: unknown,
+  text: unknown,
+  onlyEmpty: unknown
+): Promise<Result<number>> {
   return guard(async () => {
     const blocks = parseBlocks(typeof text === "string" ? text : "")
-    const targets = (await listQueuedInOrder()).filter((item) => onlyEmpty !== true || !item.caption)
+    const targets = (await listQueuedInOrder(asChannel(channelInput))).filter((item) => onlyEmpty !== true || !item.caption)
     let applied = 0
     for (const [index, item] of targets.entries()) {
       const caption = blocks[index]
@@ -168,7 +181,7 @@ export async function applyQueueCaptions(text: unknown, onlyEmpty: unknown): Pro
   })
 }
 
-export async function saveQueueSettings(input: {
+export async function saveQueueSettings(channelInput: unknown, input: {
   enabled: unknown
   times: unknown
   deleteAfter: unknown
@@ -178,18 +191,20 @@ export async function saveQueueSettings(input: {
   return guard(async () => {
     const times = parseTimes(input.times)
     if (times.length === 0) throw new Error("ჩაწერე მინიმუმ ერთი საათი, მაგ. 10:00.")
-    await setSetting("queue_enabled", input.enabled === false ? "off" : "on")
-    await setSetting("queue_times", JSON.stringify(times))
-    await setSetting("queue_delete_after", input.deleteAfter === false ? "off" : "on")
+    const channel = asChannel(channelInput)
+    const key = (name: string) => queueSettingKey(channel, name)
+    await setSetting(key("enabled"), input.enabled === false ? "off" : "on")
+    await setSetting(key("times"), JSON.stringify(times))
+    await setSetting(key("delete_after"), input.deleteAfter === false ? "off" : "on")
     if (input.slotKinds !== undefined)
-      await setSetting("queue_slot_kinds", JSON.stringify(parseSlotKinds(input.slotKinds)))
+      await setSetting(key("slot_kinds"), JSON.stringify(parseSlotKinds(input.slotKinds)))
     if (typeof input.defaultCaption === "string") {
       const caption = input.defaultCaption.trim().slice(0, 2200)
-      await setSetting("queue_default_caption", caption)
-      await fillEmptyQueueCaptions(caption)
+      await setSetting(key("default_caption"), caption)
+      await fillEmptyQueueCaptions(channel, caption)
     }
-    await rescheduleQueue()
-    return readQueueSettings()
+    await rescheduleQueue(channel)
+    return readQueueSettings(channel)
   })
 }
 
@@ -201,16 +216,19 @@ export async function publishQueueItemNow(id: unknown): Promise<Result<string>> 
     const item = await getQueueItem(asId(id))
     if (!item) throw new Error("Item not found.")
     if (item.status !== "queued") throw new Error("ეს უკვე ქვეყნდება ან გამოქვეყნებულია.")
+    if (item.channel === "ig" && !meta.igUserId) throw new Error("Instagram არ არის დაკავშირებული (META_IG_USER_ID).")
     const status = await advanceQueueItem(meta, item)
-    await rescheduleQueue()
+    await rescheduleQueue(item.channel)
     return status
   })
 }
 
 export async function retryQueueItem(id: unknown): Promise<Result<null>> {
   return guard(async () => {
-    await resetQueueItem(asId(id))
-    await rescheduleQueue()
+    const item = await getQueueItem(asId(id))
+    if (!item) return null
+    await resetQueueItem(item.id)
+    await rescheduleQueue(item.channel)
     return null
   })
 }
@@ -221,7 +239,8 @@ export async function refreshQueuePublishing(): Promise<Result<null>> {
   return guard(async () => {
     const meta = metaConfig()
     if (!meta) return null
-    for (const item of await listQueuePublishing()) await advanceQueueItem(meta, item)
+    for (const channel of QUEUE_CHANNELS)
+      for (const item of await listQueuePublishing(channel)) await advanceQueueItem(meta, item)
     return null
   })
 }
