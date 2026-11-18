@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
+    "@ffmpeg-installer/linux-x64": "4.1.0",
     "@higgsfield/client": "^0.2.6",
     "@neondatabase/serverless": "^1.2.0",
     "@tanstack/react-virtual": "^3.14.13",

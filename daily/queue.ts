@@ -4,6 +4,7 @@ import { del } from "@vercel/blob"
 import sharp from "sharp"
 
 import { readFile, signedReadUrl } from "./blob-server"
+import { brandStoredVideo } from "./brand"
 import { CAPTION_VARIANTS, parseVariants } from "./caption-variants"
 import {
   clearQueueMedia,
@@ -12,7 +13,10 @@ import {
   listQueuePublishing,
   listQueuedInOrder,
   nextDueQueueItem,
+  nextUnbrandedVideo,
   saveQueuePublish,
+  setQueueBranded,
+  setQueueBrandingError,
   setQueueCaption,
   setQueueSchedule,
   setSetting,
@@ -185,12 +189,41 @@ async function mediaForMeta(item: QueueItem): Promise<string> {
 }
 
 
+/** Puts the behero.ge badge on a queued video. Returns the item with its new
+    file, or throws with the reason (also saved on the item). */
+export async function brandQueueItem(item: QueueItem): Promise<QueueItem> {
+  if (item.kind !== "video" || item.branding === "done" || !item.mediaUrl) return item
+  try {
+    const branded = await brandStoredVideo(item.mediaUrl, item.fileName)
+    await setQueueBranded(item.id, branded.url, branded.bytes)
+    return { ...item, mediaUrl: branded.url, bytes: branded.bytes, mediaType: "video/mp4", branding: "done" }
+  } catch (caught) {
+    const reason = `ლოგო ვერ დაედო: ${message(caught)}`.slice(0, 500)
+    await setQueueBrandingError(item.id, reason)
+    throw new Error(reason)
+  }
+}
+
 /** One posting step for a queue item, to its channel only; deletes the file
     once posted when that setting is on. */
 export async function advanceQueueItem(meta: MetaConfig, item: QueueItem): Promise<QueueStatus> {
   const settings = await readQueueSettings(item.channel)
   const continuing = item.status === "publishing"
   let media: string | null = null
+  if (!continuing && item.kind === "video" && item.branding !== "done") {
+    try {
+      item = await brandQueueItem(item)
+    } catch (caught) {
+      await saveQueuePublish(item.id, {
+        status: "failed",
+        fbPostId: item.fbPostId,
+        igContainerId: item.igContainerId,
+        igMediaId: item.igMediaId,
+        error: message(caught),
+      })
+      return "failed"
+    }
+  }
   if (!continuing) {
     if (!item.mediaUrl) throw new Error("ფაილი აღარ არის საცავში.")
     try {
@@ -248,6 +281,16 @@ export async function processQueue(
     const part = await processChannel(meta, channel, now)
     report.published += part.published
     report.notes.push(...part.notes)
+  }
+  // Ahead of time: badge one more waiting video per pass, so posting
+  // itself rarely has to wait for ffmpeg.
+  const next = await nextUnbrandedVideo()
+  if (next) {
+    try {
+      await brandQueueItem(next)
+    } catch (caught) {
+      report.notes.push(`Queue ${next.fileName}: ${message(caught)}`)
+    }
   }
   return report
 }

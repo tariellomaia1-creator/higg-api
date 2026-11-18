@@ -30,6 +30,7 @@ export async function storeFile(
       access: "public",
       contentType,
       addRandomSuffix: true,
+      multipart: body.length > 50 * 1024 * 1024,
     })
     return blob.url
   } catch (publicError) {
@@ -38,6 +39,7 @@ export async function storeFile(
         access: "private",
         contentType,
         addRandomSuffix: true,
+        multipart: body.length > 50 * 1024 * 1024,
       })
       return blob.url
     } catch {
