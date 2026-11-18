@@ -34,6 +34,7 @@ import {
   saveQueueCaption,
   saveQueueCaptionVariants,
   saveQueueSettings,
+  setQueueItemBadge,
 } from "@/daily/queue-actions"
 import type { QueueView } from "@/daily/queue-actions"
 import { kindAt, parseTimes } from "@/daily/queue-schedule"
@@ -733,20 +734,32 @@ function QueueRow({
           {item.kind === "video" && item.status !== "published" ? (
             <span
               className={cn(
-                "rounded-full px-2 py-0.5 text-xs",
+                "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs",
                 item.branding === "done"
                   ? "bg-primary/15 text-primary"
-                  : item.branding
+                  : item.branding && item.branding !== "skip"
                     ? "bg-destructive/15 text-destructive"
                     : "bg-muted text-muted-foreground"
               )}
-              title={item.branding && item.branding !== "done" ? item.branding : undefined}
+              title={item.branding && item.branding !== "done" && item.branding !== "skip" ? item.branding : undefined}
             >
               {item.branding === "done"
                 ? "behero.ge ✓"
-                : item.branding
-                  ? "behero.ge ვერ დაედო"
-                  : "behero.ge დაედება"}
+                : item.branding === "skip"
+                  ? "ლოგოს გარეშე"
+                  : item.branding
+                    ? "behero.ge ვერ დაედო"
+                    : "behero.ge დაედება"}
+              {item.status === "queued" && (item.branding === null || item.branding === "skip") ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void run(() => setQueueItemBadge(item.id, item.branding === "skip"))}
+                  className="underline underline-offset-2 hover:text-foreground"
+                >
+                  {item.branding === "skip" ? "დაედოს" : "არ დაედოს"}
+                </button>
+              ) : null}
             </span>
           ) : null}
         </div>
