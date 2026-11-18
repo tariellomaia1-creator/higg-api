@@ -103,6 +103,8 @@ export function QueuePlanner({ channel }: { channel: QueueChannel }) {
   const [notice, setNotice] = useState<string | null>(null)
   const [upload, setUpload] = useState<{ done: number; total: number; percent: number } | null>(null)
   const [bulk, setBulk] = useState("")
+  const [bothChannels, setBothChannels] = useState(true)
+  const other = channel === "fb" ? CHANNELS.ig.label : CHANNELS.fb.label
   const fileInput = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
@@ -169,9 +171,14 @@ export function QueuePlanner({ channel }: { channel: QueueChannel }) {
       }
     }
     if (uploaded.length) {
-      const result = await addQueueFiles(channel, uploaded)
+      const result = await addQueueFiles(channel, uploaded, bothChannels)
       if (!result.ok) setError(result.error)
-      else setNotice(`რიგს დაემატა ${result.data} ფაილი.`)
+      else
+        setNotice(
+          bothChannels
+            ? `${result.data} ფაილი დაემატა ორივე რიგს (${CHANNELS[channel].label} + ${other}).`
+            : `რიგს დაემატა ${result.data} ფაილი.`
+        )
     }
     setUpload(null)
     await load()
@@ -227,6 +234,15 @@ export function QueuePlanner({ channel }: { channel: QueueChannel }) {
 
           <section className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4">
             <h2 className="font-heading text-lg font-semibold">ატვირთვა</h2>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                id="upload-both-channels"
+                type="checkbox"
+                checked={bothChannels}
+                onChange={(event) => setBothChannels(event.target.checked)}
+              />
+              {other}-ის რიგშიც დაემატოს (ერთი ატვირთვა, ორივე არხი, თავ-თავისი საათით და caption-ით)
+            </label>
             <div
               onDragOver={(event) => event.preventDefault()}
               onDrop={(event) => {

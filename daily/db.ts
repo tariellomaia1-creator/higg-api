@@ -399,7 +399,7 @@ export async function storageUsedBytes(): Promise<number> {
   const sql = await db()
   const result = await sql`SELECT
     (SELECT COALESCE(SUM(start_image_bytes + result_bytes), 0) FROM daily_items) +
-    (SELECT COALESCE(SUM(bytes), 0) FROM post_queue) AS used`
+    (SELECT COALESCE(SUM(bytes), 0) FROM (SELECT DISTINCT ON (media_url) bytes FROM post_queue WHERE media_url IS NOT NULL) AS files) AS used`
   const row = Array.isArray(result) ? (result[0] as Record<string, unknown>) : undefined
   return num(row?.used)
 }
@@ -554,6 +554,7 @@ export async function insertQueueItems(
     mediaType: string
     bytes: number
     caption: string
+    branding?: string | null
   }>
 ): Promise<void> {
   const sql = await db()
@@ -562,9 +563,9 @@ export async function insertQueueItems(
   for (const item of items) {
     position += 1
     await sql`INSERT INTO post_queue (channel, position, kind, file_name, media_url, media_type, bytes, caption,
-        to_facebook, to_instagram)
+        to_facebook, to_instagram, branding)
       VALUES (${channel}, ${position}, ${item.kind}, ${item.fileName}, ${item.mediaUrl}, ${item.mediaType},
-        ${item.bytes}, ${item.caption}, ${channel === "fb"}, ${channel === "ig"})`
+        ${item.bytes}, ${item.caption}, ${channel === "fb"}, ${channel === "ig"}, ${item.branding ?? null})`
   }
 }
 
@@ -643,11 +644,28 @@ export async function nextDueQueueItem(channel: QueueChannel, nowIso: string): P
   )
 }
 
-/** The branded copy replaces the original file. */
-export async function setQueueBranded(id: string, url: string, bytes: number): Promise<void> {
+/** The branded copy replaces the original file in every queue row that
+    shares it (one upload can sit in both channels). */
+export async function setQueueBranded(oldUrl: string, url: string, bytes: number): Promise<void> {
   const sql = await db()
   await sql`UPDATE post_queue SET media_url = ${url}, bytes = ${bytes}, media_type = 'video/mp4',
-    branding = 'done', updated_at = now() WHERE id = ${id}`
+    branding = 'done', updated_at = now() WHERE media_url = ${oldUrl}`
+}
+
+/** Other queue rows that still use this stored file. */
+export async function otherMediaRefs(url: string, exceptId: string): Promise<number> {
+  const sql = await db()
+  const result = await sql`SELECT COUNT(*) AS n FROM post_queue WHERE media_url = ${url} AND id <> ${exceptId}`
+  return num(Array.isArray(result) ? (result[0] as Record<string, unknown>)?.n : 0)
+}
+
+/** Every stored file a channel has ever held, to avoid copying twice. */
+export async function channelMediaUrls(channel: QueueChannel): Promise<Set<string>> {
+  const sql = await db()
+  const result = await sql`SELECT media_url FROM post_queue WHERE channel = ${channel} AND media_url IS NOT NULL`
+  return new Set(
+    (Array.isArray(result) ? result : []).map((row) => String((row as Record<string, unknown>).media_url))
+  )
 }
 
 export async function setQueueBrandingError(id: string, error: string | null): Promise<void> {
@@ -680,6 +698,7 @@ export async function countPublished(channel: QueueChannel): Promise<number> {
 
 export async function queueStorageBytes(): Promise<number> {
   const sql = await db()
-  const result = await sql`SELECT COALESCE(SUM(bytes), 0) AS used FROM post_queue`
+  const result = await sql`SELECT COALESCE(SUM(bytes), 0) AS used FROM
+    (SELECT DISTINCT ON (media_url) bytes FROM post_queue WHERE media_url IS NOT NULL) AS files`
   return num(Array.isArray(result) ? (result[0] as Record<string, unknown>)?.used : 0)
 }

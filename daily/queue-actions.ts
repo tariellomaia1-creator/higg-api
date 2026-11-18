@@ -16,6 +16,7 @@ import {
   queueStorageBytes,
   resetQueueItem,
   setQueueCaption,
+  otherMediaRefs,
   setQueueBrandingError,
   setQueuePosition,
   setSetting,
@@ -28,6 +29,8 @@ import {
   advanceQueueItem,
   applyCaptionVariantsOnce,
   asChannel,
+  copyToChannel,
+  mirrorFacebookBacklogOnce,
   distributeCaptionVariants,
   pickVariant,
   readCaptionVariants,
@@ -88,6 +91,7 @@ export async function getQueueView(channelInput: unknown): Promise<Result<QueueV
   return guard(async () => {
     const channel = asChannel(channelInput)
     await applyCaptionVariantsOnce()
+    if (metaConfig()?.igUserId) await mirrorFacebookBacklogOnce()
     await fillEmptyQueueCaptions(channel, (await readQueueSettings(channel)).defaultCaption)
     const meta = metaConfig()
     const [items, settings, lastTickAt, queueBytes, variants] = await Promise.all([
@@ -110,9 +114,12 @@ export async function getQueueView(channelInput: unknown): Promise<Result<QueueV
   })
 }
 
+/** Adds uploaded files to a channel's queue and, with `alsoOther`, to the
+    other channel's queue too (same stored file, own caption and times). */
 export async function addQueueFiles(
   channelInput: unknown,
-  files: Array<{ url: unknown; mediaType: unknown; bytes: unknown; fileName: unknown }>
+  files: Array<{ url: unknown; mediaType: unknown; bytes: unknown; fileName: unknown }>,
+  alsoOther?: unknown
 ): Promise<Result<number>> {
   return guard(async () => {
     const channel = asChannel(channelInput)
@@ -135,6 +142,11 @@ export async function addQueueFiles(
       rows.map((row, index) => ({ ...row, caption: pickVariant(variants, channel, existing + index) }))
     )
     await rescheduleQueue(channel)
+    if (alsoOther === true)
+      await copyToChannel(
+        channel === "fb" ? "ig" : "fb",
+        rows.map((row) => ({ ...row, branding: null }))
+      )
     return rows.length
   })
 }
@@ -167,7 +179,7 @@ export async function moveQueueItem(id: unknown, direction: unknown): Promise<Re
 export async function removeQueueItem(id: unknown): Promise<Result<null>> {
   return guard(async () => {
     const removed = await deleteQueueItem(asId(id))
-    if (removed?.mediaUrl && isBlobUrl(removed.mediaUrl))
+    if (removed?.mediaUrl && isBlobUrl(removed.mediaUrl) && (await otherMediaRefs(removed.mediaUrl, removed.id)) === 0)
       await del(removed.mediaUrl).catch(() => undefined)
     if (removed) await rescheduleQueue(removed.channel)
     return null
