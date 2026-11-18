@@ -7,8 +7,12 @@ import { readFile, signedReadUrl } from "./blob-server"
 import { brandStoredVideo } from "./brand"
 import { CAPTION_VARIANTS, parseVariants } from "./caption-variants"
 import {
+  channelMediaUrls,
   clearQueueMedia,
   countPublished,
+  countQueueItems,
+  insertQueueItems,
+  otherMediaRefs,
   getSetting,
   listQueuePublishing,
   listQueuedInOrder,
@@ -157,6 +161,44 @@ export async function applyCaptionVariantsOnce(): Promise<void> {
   await setSetting("caption_variants_applied", new Date().toISOString())
 }
 
+/** Adds the given files to a channel's queue (the same stored file, no
+    second upload), each with the next caption variant. Skips files the
+    channel already has. Returns how many were added. */
+export async function copyToChannel(
+  channel: QueueChannel,
+  files: Array<Pick<QueueItem, "kind" | "fileName" | "mediaUrl" | "mediaType" | "bytes" | "branding">>
+): Promise<number> {
+  const [known, variants, existing] = await Promise.all([
+    channelMediaUrls(channel),
+    readCaptionVariants(),
+    countQueueItems(channel),
+  ])
+  const fresh = files.filter((file) => file.mediaUrl && !known.has(file.mediaUrl))
+  if (fresh.length === 0) return 0
+  await insertQueueItems(
+    channel,
+    fresh.map((file, index) => ({
+      kind: file.kind,
+      fileName: file.fileName,
+      mediaUrl: file.mediaUrl!,
+      mediaType: file.mediaType,
+      bytes: file.bytes,
+      caption: pickVariant(variants, channel, existing + index),
+      branding: file.branding === "done" ? "done" : null,
+    }))
+  )
+  await rescheduleQueue(channel)
+  return fresh.length
+}
+
+/** One-time: files uploaded to the Facebook queue before uploads went to
+    both channels also join the Instagram queue. */
+export async function mirrorFacebookBacklogOnce(): Promise<void> {
+  if (await getSetting("mirror_fb_to_ig_done")) return
+  await copyToChannel("ig", await listQueuedInOrder("fb"))
+  await setSetting("mirror_fb_to_ig_done", new Date().toISOString())
+}
+
 /** Gives every waiting item a posting time: videos to video slots, images
     to image slots, in queue order, starting just after now. Called after any
     change to the queue. */
@@ -195,7 +237,7 @@ export async function brandQueueItem(item: QueueItem): Promise<QueueItem> {
   if (item.kind !== "video" || item.branding === "done" || !item.mediaUrl) return item
   try {
     const branded = await brandStoredVideo(item.mediaUrl, item.fileName)
-    await setQueueBranded(item.id, branded.url, branded.bytes)
+    await setQueueBranded(item.mediaUrl, branded.url, branded.bytes)
     return { ...item, mediaUrl: branded.url, bytes: branded.bytes, mediaType: "video/mp4", branding: "done" }
   } catch (caught) {
     const reason = `ლოგო ვერ დაედო: ${message(caught)}`.slice(0, 500)
@@ -257,7 +299,7 @@ export async function advanceQueueItem(meta: MetaConfig, item: QueueItem): Promi
     error: outcome.error,
   })
   if (status === "published" && item.mediaUrl && settings.deleteAfter) {
-    await del(item.mediaUrl).catch(() => undefined)
+    if ((await otherMediaRefs(item.mediaUrl, item.id)) === 0) await del(item.mediaUrl).catch(() => undefined)
     await clearQueueMedia(item.id)
   }
   return status
@@ -273,8 +315,9 @@ export async function processQueue(
   const report = { published: 0, notes: [] as string[] }
   try {
     await applyCaptionVariantsOnce()
+    if (meta.igUserId) await mirrorFacebookBacklogOnce()
   } catch (caught) {
-    report.notes.push(`Caption variants: ${message(caught)}`)
+    report.notes.push(`Queue setup: ${message(caught)}`)
   }
   for (const channel of QUEUE_CHANNELS) {
     if (channel === "ig" && !meta.igUserId) continue
