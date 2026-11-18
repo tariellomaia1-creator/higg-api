@@ -17,6 +17,7 @@ import {
   resetQueueItem,
   setQueueCaption,
   otherMediaRefs,
+  setQueueBrandingByUrl,
   setQueueBrandingError,
   setQueuePosition,
   setSetting,
@@ -253,7 +254,7 @@ export async function retryQueueItem(id: unknown): Promise<Result<null>> {
     const item = await getQueueItem(asId(id))
     if (!item) return null
     await resetQueueItem(item.id)
-    if (item.branding && item.branding !== "done") await setQueueBrandingError(item.id, null)
+    if (item.branding && item.branding !== "done" && item.branding !== "skip") await setQueueBrandingError(item.id, null)
     await rescheduleQueue(item.channel)
     return null
   })
@@ -280,4 +281,16 @@ export async function saveQueueCaptionVariants(text: unknown): Promise<Result<nu
     in queue order. `onlyPlain` keeps captions typed by hand. */
 export async function redistributeQueueCaptions(channelInput: unknown, onlyPlain: unknown): Promise<Result<number>> {
   return guard(() => distributeCaptionVariants(asChannel(channelInput), onlyPlain === true))
+}
+
+/** Turns the behero.ge badge off or back on for a video not yet badged
+    (both channels' copies of the file follow). */
+export async function setQueueItemBadge(id: unknown, wanted: unknown): Promise<Result<null>> {
+  return guard(async () => {
+    const item = await getQueueItem(asId(id))
+    if (!item?.mediaUrl || item.kind !== "video") return null
+    if (item.branding === "done") throw new Error("ლოგო უკვე დადებულია; მოსახსნელად ვიდეო თავიდან ატვირთე.")
+    await setQueueBrandingByUrl(item.mediaUrl, wanted === true ? null : "skip")
+    return null
+  })
 }

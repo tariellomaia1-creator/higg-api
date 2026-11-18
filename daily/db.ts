@@ -668,6 +668,13 @@ export async function channelMediaUrls(channel: QueueChannel): Promise<Set<strin
   )
 }
 
+/** Badge state for every row sharing a file ("skip" = no badge). */
+export async function setQueueBrandingByUrl(url: string, branding: string | null): Promise<void> {
+  const sql = await db()
+  await sql`UPDATE post_queue SET branding = ${branding}, updated_at = now()
+    WHERE media_url = ${url} AND kind = 'video' AND (branding IS NULL OR branding NOT IN ('done'))`
+}
+
 export async function setQueueBrandingError(id: string, error: string | null): Promise<void> {
   const sql = await db()
   await sql`UPDATE post_queue SET branding = ${error}, updated_at = now() WHERE id = ${id}`

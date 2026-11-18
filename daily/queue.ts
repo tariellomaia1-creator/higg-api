@@ -20,6 +20,7 @@ import {
   nextUnbrandedVideo,
   saveQueuePublish,
   setQueueBranded,
+  setQueueBrandingByUrl,
   setQueueBrandingError,
   setQueueCaption,
   setQueueSchedule,
@@ -184,7 +185,7 @@ export async function copyToChannel(
       mediaType: file.mediaType,
       bytes: file.bytes,
       caption: pickVariant(variants, channel, existing + index),
-      branding: file.branding === "done" ? "done" : null,
+      branding: brandingSettled(file.branding) ? file.branding : null,
     }))
   )
   await rescheduleQueue(channel)
@@ -231,12 +232,21 @@ async function mediaForMeta(item: QueueItem): Promise<string> {
 }
 
 
+/** "done" = badged, "skip" = no badge wanted (poster, or turned off). */
+export function brandingSettled(branding: string | null): boolean {
+  return branding === "done" || branding === "skip"
+}
+
 /** Puts the behero.ge badge on a queued video. Returns the item with its new
     file, or throws with the reason (also saved on the item). */
 export async function brandQueueItem(item: QueueItem): Promise<QueueItem> {
-  if (item.kind !== "video" || item.branding === "done" || !item.mediaUrl) return item
+  if (item.kind !== "video" || brandingSettled(item.branding) || !item.mediaUrl) return item
   try {
     const branded = await brandStoredVideo(item.mediaUrl, item.fileName)
+    if (!branded) {
+      await setQueueBrandingByUrl(item.mediaUrl, "skip")
+      return { ...item, branding: "skip" }
+    }
     await setQueueBranded(item.mediaUrl, branded.url, branded.bytes)
     return { ...item, mediaUrl: branded.url, bytes: branded.bytes, mediaType: "video/mp4", branding: "done" }
   } catch (caught) {
@@ -252,7 +262,7 @@ export async function advanceQueueItem(meta: MetaConfig, item: QueueItem): Promi
   const settings = await readQueueSettings(item.channel)
   const continuing = item.status === "publishing"
   let media: string | null = null
-  if (!continuing && item.kind === "video" && item.branding !== "done") {
+  if (!continuing && item.kind === "video" && !brandingSettled(item.branding)) {
     try {
       item = await brandQueueItem(item)
     } catch (caught) {
