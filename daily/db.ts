@@ -120,6 +120,7 @@ async function createSchema(sql: Sql): Promise<void> {
       UNIQUE (day, kind, slot)
     )`
   await sql`ALTER TABLE post_queue ADD COLUMN IF NOT EXISTS channel text NOT NULL DEFAULT 'fb'`
+  await sql`ALTER TABLE post_queue ADD COLUMN IF NOT EXISTS branding text`
   await sql`ALTER TABLE daily_items ADD COLUMN IF NOT EXISTS credits_used numeric NOT NULL DEFAULT 0`
   await sql`ALTER TABLE daily_items ADD COLUMN IF NOT EXISTS submitted_at timestamptz`
   await sql`ALTER TABLE daily_items ADD COLUMN IF NOT EXISTS completed_at timestamptz`
@@ -491,6 +492,8 @@ export type QueueItem = {
   igMediaId: string | null
   error: string | null
   publishedAt: string | null
+  /** behero.ge badge on videos: null = not yet, "done", or the error. */
+  branding: string | null
 }
 
 function toQueueItem(row: Record<string, unknown>): QueueItem {
@@ -513,6 +516,7 @@ function toQueueItem(row: Record<string, unknown>): QueueItem {
     igMediaId: str(row.ig_media_id),
     error: str(row.error),
     publishedAt: isoOrNull(row.published_at),
+    branding: str(row.branding),
   }
 }
 
@@ -636,6 +640,28 @@ export async function nextDueQueueItem(channel: QueueChannel, nowIso: string): P
     queueRows(await sql`SELECT * FROM post_queue
       WHERE channel = ${channel} AND status = 'queued' AND media_url IS NOT NULL AND scheduled_at IS NOT NULL AND scheduled_at <= ${nowIso}
       ORDER BY scheduled_at, position LIMIT 1`)[0] ?? null
+  )
+}
+
+/** The branded copy replaces the original file. */
+export async function setQueueBranded(id: string, url: string, bytes: number): Promise<void> {
+  const sql = await db()
+  await sql`UPDATE post_queue SET media_url = ${url}, bytes = ${bytes}, media_type = 'video/mp4',
+    branding = 'done', updated_at = now() WHERE id = ${id}`
+}
+
+export async function setQueueBrandingError(id: string, error: string | null): Promise<void> {
+  const sql = await db()
+  await sql`UPDATE post_queue SET branding = ${error}, updated_at = now() WHERE id = ${id}`
+}
+
+/** The waiting video that posts soonest and has no badge yet. */
+export async function nextUnbrandedVideo(): Promise<QueueItem | null> {
+  const sql = await db()
+  return (
+    queueRows(await sql`SELECT * FROM post_queue
+      WHERE kind = 'video' AND status = 'queued' AND media_url IS NOT NULL AND branding IS NULL
+      ORDER BY scheduled_at NULLS LAST, position LIMIT 1`)[0] ?? null
   )
 }
 

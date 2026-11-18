@@ -16,6 +16,7 @@ import {
   queueStorageBytes,
   resetQueueItem,
   setQueueCaption,
+  setQueueBrandingError,
   setQueuePosition,
   setSetting,
 } from "./db"
@@ -240,6 +241,7 @@ export async function retryQueueItem(id: unknown): Promise<Result<null>> {
     const item = await getQueueItem(asId(id))
     if (!item) return null
     await resetQueueItem(item.id)
+    if (item.branding && item.branding !== "done") await setQueueBrandingError(item.id, null)
     await rescheduleQueue(item.channel)
     return null
   })

@@ -714,6 +714,25 @@ function QueueRow({
           <span className="min-w-0 truncate text-xs text-muted-foreground">
             {item.fileName} · {formatBytes(item.bytes)}
           </span>
+          {item.kind === "video" && item.status !== "published" ? (
+            <span
+              className={cn(
+                "rounded-full px-2 py-0.5 text-xs",
+                item.branding === "done"
+                  ? "bg-primary/15 text-primary"
+                  : item.branding
+                    ? "bg-destructive/15 text-destructive"
+                    : "bg-muted text-muted-foreground"
+              )}
+              title={item.branding && item.branding !== "done" ? item.branding : undefined}
+            >
+              {item.branding === "done"
+                ? "behero.ge ✓"
+                : item.branding
+                  ? "behero.ge ვერ დაედო"
+                  : "behero.ge დაედება"}
+            </span>
+          ) : null}
         </div>
 
         <textarea
