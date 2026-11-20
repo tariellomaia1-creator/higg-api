@@ -6,8 +6,6 @@ import { constants } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 
-import { del } from "@vercel/blob"
-
 import { readFile, storeFile } from "./blob-server"
 
 /** Puts the "behero.ge" badge (daily/assets/watermark.png) on a video:
@@ -152,9 +150,9 @@ export async function brandVideoBytes(input: Buffer): Promise<Buffer | null> {
   }
 }
 
-/** Brands a stored video: writes the branded copy to storage, deletes the
-    original and returns the new URL and size; null for a poster (not
-    vertical), which stays untouched. */
+/** Brands a stored video: writes the branded copy to storage and returns
+    its URL and size (the caller deletes the original once no queue uses
+    it); null for a poster (not vertical), which stays untouched. */
 export async function brandStoredVideo(
   url: string,
   fileName: string
@@ -165,6 +163,5 @@ export async function brandStoredVideo(
   if (!branded) return null
   const base = (fileName || "video").replace(/\.[^.]+$/, "").replace(/[^\w.-]+/g, "_").slice(-60) || "video"
   const stored = await storeFile(`daily/queue/branded/${base}.mp4`, branded, "video/mp4")
-  await del(url).catch(() => undefined)
   return { url: stored, bytes: branded.length }
 }

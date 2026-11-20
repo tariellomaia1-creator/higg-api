@@ -4,12 +4,12 @@ import { del } from "@vercel/blob"
 
 import { parseBlocks } from "./blocks"
 import { formatVariants } from "./caption-variants"
+import { discoverPages, listChannels, saveExtraChannels } from "./channels"
+import type { ChannelInfo, DiscoveredPage } from "./channels"
 import {
-  countQueueItems,
   deleteQueueItem,
   getQueueItem,
   getSetting,
-  insertQueueItems,
   listQueue,
   listQueuedInOrder,
   listQueuePublishing,
@@ -26,14 +26,12 @@ import type { QueueChannel, QueueItem } from "./db"
 import { storageLimitBytes } from "./config"
 import { metaConfig } from "./meta"
 import {
-  QUEUE_CHANNELS,
   advanceQueueItem,
   applyCaptionVariantsOnce,
   asChannel,
   copyToChannel,
   mirrorFacebookBacklogOnce,
   distributeCaptionVariants,
-  pickVariant,
   readCaptionVariants,
   saveCaptionVariants,
   queueSettingKey,
@@ -71,12 +69,15 @@ function asId(value: unknown): string {
 
 export type QueueView = {
   channel: QueueChannel
+  /** The open channel, and every channel for the tabs and upload targets. */
+  current: ChannelInfo
+  channels: ChannelInfo[]
+  /** Other pages the Meta user token can post to, for the page picker. */
+  pages: { list: DiscoveredPage[]; error: string | null; configured: boolean }
   items: QueueItem[]
   settings: QueueSettings
-  metaConnected: boolean
-  instagramConnected: boolean
   lastTickAt: string | null
-  /** Caption rewordings, `---`-separated, shared by both channels. */
+  /** Caption rewordings, `---`-separated (BeHero's two channels share one list). */
   captionVariants: string
   storage: { queue: number; limit: number }
 }
@@ -90,24 +91,28 @@ async function fillEmptyQueueCaptions(channel: QueueChannel, caption: string): P
 
 export async function getQueueView(channelInput: unknown): Promise<Result<QueueView>> {
   return guard(async () => {
-    const channel = asChannel(channelInput)
     await applyCaptionVariantsOnce()
     if (metaConfig()?.igUserId) await mirrorFacebookBacklogOnce()
+    const channels = await listChannels()
+    const requested = asChannel(channelInput)
+    const current = channels.find((entry) => entry.id === requested) ?? channels[0]!
+    const channel = current.id
     await fillEmptyQueueCaptions(channel, (await readQueueSettings(channel)).defaultCaption)
-    const meta = metaConfig()
-    const [items, settings, lastTickAt, queueBytes, variants] = await Promise.all([
+    const [items, settings, lastTickAt, queueBytes, variants, pages] = await Promise.all([
       listQueue(channel),
       readQueueSettings(channel),
       getSetting("last_tick_at"),
       queueStorageBytes(),
-      readCaptionVariants(),
+      readCaptionVariants(channel),
+      discoverPages(),
     ])
     return {
       channel,
+      current,
+      channels,
+      pages: { list: pages.pages, error: pages.error, configured: pages.configured },
       items,
       settings,
-      metaConnected: Boolean(meta),
-      instagramConnected: Boolean(meta?.igUserId),
       lastTickAt,
       captionVariants: formatVariants(variants),
       storage: { queue: queueBytes, limit: storageLimitBytes() },
@@ -115,12 +120,12 @@ export async function getQueueView(channelInput: unknown): Promise<Result<QueueV
   })
 }
 
-/** Adds uploaded files to a channel's queue and, with `alsoOther`, to the
-    other channel's queue too (same stored file, own caption and times). */
+/** Adds uploaded files to a channel's queue and to the `alsoChannels`
+    queues too (same stored file, own caption and times per channel). */
 export async function addQueueFiles(
   channelInput: unknown,
   files: Array<{ url: unknown; mediaType: unknown; bytes: unknown; fileName: unknown }>,
-  alsoOther?: unknown
+  alsoChannels?: unknown
 ): Promise<Result<number>> {
   return guard(async () => {
     const channel = asChannel(channelInput)
@@ -134,20 +139,14 @@ export async function addQueueFiles(
         mediaUrl: file.url,
         mediaType,
         bytes: Math.max(0, Number(file.bytes) || 0),
-        caption: "",
+        branding: null,
       }
     })
-    const [variants, existing] = await Promise.all([readCaptionVariants(), countQueueItems(channel)])
-    await insertQueueItems(
-      channel,
-      rows.map((row, index) => ({ ...row, caption: pickVariant(variants, channel, existing + index) }))
-    )
-    await rescheduleQueue(channel)
-    if (alsoOther === true)
-      await copyToChannel(
-        channel === "fb" ? "ig" : "fb",
-        rows.map((row) => ({ ...row, branding: null }))
-      )
+    const known = new Set((await listChannels()).map((entry) => entry.id))
+    const extra = Array.isArray(alsoChannels)
+      ? alsoChannels.filter((id): id is string => typeof id === "string" && known.has(id) && id !== channel)
+      : []
+    for (const target of [channel, ...new Set(extra)]) await copyToChannel(target, rows)
     return rows.length
   })
 }
@@ -237,13 +236,10 @@ export async function saveQueueSettings(channelInput: unknown, input: {
 /** Posts one item now, ahead of its time. */
 export async function publishQueueItemNow(id: unknown): Promise<Result<string>> {
   return guard(async () => {
-    const meta = metaConfig()
-    if (!meta) throw new Error("Meta is not connected (META_PAGE_ID / META_PAGE_ACCESS_TOKEN).")
     const item = await getQueueItem(asId(id))
     if (!item) throw new Error("Item not found.")
     if (item.status !== "queued") throw new Error("ეს უკვე ქვეყნდება ან გამოქვეყნებულია.")
-    if (item.channel === "ig" && !meta.igUserId) throw new Error("Instagram არ არის დაკავშირებული (META_IG_USER_ID).")
-    const status = await advanceQueueItem(meta, item)
+    const status = await advanceQueueItem(item)
     await rescheduleQueue(item.channel)
     return status
   })
@@ -264,17 +260,27 @@ export async function retryQueueItem(id: unknown): Promise<Result<null>> {
     the page is open. Starts nothing new. */
 export async function refreshQueuePublishing(): Promise<Result<null>> {
   return guard(async () => {
-    const meta = metaConfig()
-    if (!meta) return null
-    for (const channel of QUEUE_CHANNELS)
-      for (const item of await listQueuePublishing(channel)) await advanceQueueItem(meta, item)
+    for (const channel of await listChannels()) {
+      if (!channel.connected) continue
+      for (const item of await listQueuePublishing(channel.id)) await advanceQueueItem(item)
+    }
     return null
   })
 }
 
-/** Saves the caption rewordings (shared by both channels). */
-export async function saveQueueCaptionVariants(text: unknown): Promise<Result<number>> {
-  return guard(async () => (await saveCaptionVariants(typeof text === "string" ? text : "")).length)
+/** Saves a channel's caption rewordings (BeHero's two channels share one list). */
+export async function saveQueueCaptionVariants(channelInput: unknown, text: unknown): Promise<Result<number>> {
+  return guard(
+    async () => (await saveCaptionVariants(asChannel(channelInput), typeof text === "string" ? text : "")).length
+  )
+}
+
+/** Switches other pages' channels on or off (ids "fbp_…" / "igu_…"). */
+export async function saveQueueChannels(ids: unknown): Promise<Result<null>> {
+  return guard(async () => {
+    await saveExtraChannels(ids)
+    return null
+  })
 }
 
 /** Gives the waiting files of a channel different captions from the list,
