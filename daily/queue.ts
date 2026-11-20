@@ -6,12 +6,14 @@ import sharp from "sharp"
 import { readFile, signedReadUrl } from "./blob-server"
 import { brandStoredVideo } from "./brand"
 import { CAPTION_VARIANTS, parseVariants } from "./caption-variants"
+import { channelTarget, isBeheroChannel, listChannels } from "./channels"
 import {
   channelMediaUrls,
   clearQueueMedia,
   countPublished,
   countQueueItems,
   insertQueueItems,
+  mediaRefs,
   otherMediaRefs,
   getSetting,
   listQueuePublishing,
@@ -54,22 +56,20 @@ export type QueueSettings = {
 export const DEFAULT_QUEUE_CAPTION =
   "ნუ ხარჯავ დროს იმაზე, რაც უკვე იცი. 🎯\n\nbehero.ge-ზე  მათემატიკაში მასწავლებლისა და ეროვნული გამოცდისთვის:\n🎬 საგამოცდო ტესტის ვიდეოამოხსნა\n📝 ანალოგიური ტესტები სავარჯიშოდ\n🔁 ვარჯიში მხოლოდ შენს შეცდომებზე\n🎯 ვარჯიში მხოლოდ სუსტ თემებზე\n\n🎁 მოგვწერე და სცადე უფასოდ!"
 
-export const QUEUE_CHANNELS: QueueChannel[] = ["fb", "ig"]
+export { asChannel } from "./channels"
 
-export function asChannel(value: unknown): QueueChannel {
-  return value === "ig" ? "ig" : "fb"
-}
-
-/** Settings keys: Facebook keeps the original "queue_*" keys, Instagram
-    has its own "ig_queue_*" set. */
+/** Settings keys: BeHero Facebook keeps the original "queue_*" keys,
+    BeHero Instagram "ig_queue_*", other pages "q_<channel>_*". */
 export function queueSettingKey(channel: QueueChannel, name: string): string {
-  return channel === "ig" ? `ig_queue_${name}` : `queue_${name}`
+  if (channel === "fb") return `queue_${name}`
+  if (channel === "ig") return `ig_queue_${name}`
+  return `q_${channel}_${name}`
 }
 
 export async function readQueueSettings(channel: QueueChannel): Promise<QueueSettings> {
   const key = (name: string) => queueSettingKey(channel, name)
   const defaultTimes = channel === "ig" ? DEFAULT_IG_TIMES : DEFAULT_QUEUE_TIMES
-  const defaultKinds = channel === "ig" ? DEFAULT_IG_SLOT_KINDS : DEFAULT_SLOT_KINDS
+  const defaultKinds = channel === "ig" ? DEFAULT_IG_SLOT_KINDS : channel === "fb" ? DEFAULT_SLOT_KINDS : {}
   const [enabled, times, deleteAfter, defaultCaption, slotKinds] = await Promise.all([
     getSetting(key("enabled")),
     getSetting(key("times")),
@@ -93,15 +93,19 @@ export async function readQueueSettings(channel: QueueChannel): Promise<QueueSet
     enabled: enabled !== "off",
     times: parsedTimes.length ? parsedTimes : defaultTimes,
     deleteAfter: deleteAfter !== "off",
-    defaultCaption: defaultCaption ?? DEFAULT_QUEUE_CAPTION,
+    defaultCaption: defaultCaption ?? (isBeheroChannel(channel) ? DEFAULT_QUEUE_CAPTION : ""),
     slotKinds: parsedKinds,
   }
 }
 
-/** Caption rewordings shared by both channels (setting "caption_variants",
-    JSON list); the built-in list until edited. */
-export async function readCaptionVariants(): Promise<string[]> {
-  const stored = await getSetting("caption_variants")
+function variantsKey(channel: QueueChannel): string {
+  return isBeheroChannel(channel) ? "caption_variants" : queueSettingKey(channel, "caption_variants")
+}
+
+/** Caption rewordings: BeHero's two channels share one list (the built-in
+    one until edited); every other page has its own, empty until written. */
+export async function readCaptionVariants(channel: QueueChannel): Promise<string[]> {
+  const stored = await getSetting(variantsKey(channel))
   if (stored) {
     try {
       const list = JSON.parse(stored)
@@ -113,19 +117,20 @@ export async function readCaptionVariants(): Promise<string[]> {
       // fall through to the default list
     }
   }
-  return CAPTION_VARIANTS
+  return isBeheroChannel(channel) ? CAPTION_VARIANTS : []
 }
 
-export async function saveCaptionVariants(text: string): Promise<string[]> {
+export async function saveCaptionVariants(channel: QueueChannel, text: string): Promise<string[]> {
   const list = parseVariants(text)
-  if (list.length === 0) throw new Error("ჩაწერე მინიმუმ ერთი caption.")
-  await setSetting("caption_variants", JSON.stringify(list))
+  if (list.length === 0 && isBeheroChannel(channel)) throw new Error("ჩაწერე მინიმუმ ერთი caption.")
+  await setSetting(variantsKey(channel), JSON.stringify(list))
   return list
 }
 
 /** The n-th caption of a channel. Instagram starts further along the list,
     so the same file posted on both channels rarely shares a caption. */
 export function pickVariant(variants: string[], channel: QueueChannel, n: number): string {
+  if (variants.length === 0) return ""
   const offset = channel === "ig" ? Math.floor(variants.length / 2) : 0
   return variants[(n + offset) % variants.length] ?? ""
 }
@@ -136,7 +141,7 @@ export function pickVariant(variants: string[], channel: QueueChannel, n: number
     none, so captions typed by hand stay. Returns how many changed. */
 export async function distributeCaptionVariants(channel: QueueChannel, onlyPlain: boolean): Promise<number> {
   const [variants, settings, waiting, published] = await Promise.all([
-    readCaptionVariants(),
+    readCaptionVariants(channel),
     readQueueSettings(channel),
     listQueuedInOrder(channel),
     countPublished(channel),
@@ -158,7 +163,7 @@ export async function distributeCaptionVariants(channel: QueueChannel, onlyPlain
     uploaded before variants existed. */
 export async function applyCaptionVariantsOnce(): Promise<void> {
   if (await getSetting("caption_variants_applied")) return
-  for (const channel of QUEUE_CHANNELS) await distributeCaptionVariants(channel, true)
+  for (const channel of ["fb", "ig"]) await distributeCaptionVariants(channel, true)
   await setSetting("caption_variants_applied", new Date().toISOString())
 }
 
@@ -169,10 +174,11 @@ export async function copyToChannel(
   channel: QueueChannel,
   files: Array<Pick<QueueItem, "kind" | "fileName" | "mediaUrl" | "mediaType" | "bytes" | "branding">>
 ): Promise<number> {
-  const [known, variants, existing] = await Promise.all([
+  const [known, variants, existing, settings] = await Promise.all([
     channelMediaUrls(channel),
-    readCaptionVariants(),
+    readCaptionVariants(channel),
     countQueueItems(channel),
+    readQueueSettings(channel),
   ])
   const fresh = files.filter((file) => file.mediaUrl && !known.has(file.mediaUrl))
   if (fresh.length === 0) return 0
@@ -184,8 +190,8 @@ export async function copyToChannel(
       mediaUrl: file.mediaUrl!,
       mediaType: file.mediaType,
       bytes: file.bytes,
-      caption: pickVariant(variants, channel, existing + index),
-      branding: brandingSettled(file.branding) ? file.branding : null,
+      caption: pickVariant(variants, channel, existing + index) || settings.defaultCaption,
+      branding: !isBeheroChannel(channel) ? "skip" : brandingSettled(file.branding) ? file.branding : null,
     }))
   )
   await rescheduleQueue(channel)
@@ -248,6 +254,7 @@ export async function brandQueueItem(item: QueueItem): Promise<QueueItem> {
       return { ...item, branding: "skip" }
     }
     await setQueueBranded(item.mediaUrl, branded.url, branded.bytes)
+    if ((await mediaRefs(item.mediaUrl)) === 0) await del(item.mediaUrl).catch(() => undefined)
     return { ...item, mediaUrl: branded.url, bytes: branded.bytes, mediaType: "video/mp4", branding: "done" }
   } catch (caught) {
     const reason = `ლოგო ვერ დაედო: ${message(caught)}`.slice(0, 500)
@@ -258,7 +265,9 @@ export async function brandQueueItem(item: QueueItem): Promise<QueueItem> {
 
 /** One posting step for a queue item, to its channel only; deletes the file
     once posted when that setting is on. */
-export async function advanceQueueItem(meta: MetaConfig, item: QueueItem): Promise<QueueStatus> {
+export async function advanceQueueItem(item: QueueItem): Promise<QueueStatus> {
+  const target = await channelTarget(item.channel)
+  if (!target) throw new Error("ეს არხი დაკავშირებული არ არის (Meta token / გვერდის წვდომა).")
   const settings = await readQueueSettings(item.channel)
   const continuing = item.status === "publishing"
   let media: string | null = null
@@ -291,14 +300,14 @@ export async function advanceQueueItem(meta: MetaConfig, item: QueueItem): Promi
       return "failed"
     }
   }
-  const outcome = await postToMeta(meta, {
+  const outcome = await postToMeta(target.meta, {
     kind: item.kind === "video" ? "video" : "poster",
     mediaUrl: media,
     caption: item.caption || settings.defaultCaption,
     state: { fbPostId: item.fbPostId, igContainerId: item.igContainerId, igMediaId: item.igMediaId },
     continuing,
     previousError: item.error,
-    targets: { facebook: item.channel === "fb", instagram: item.channel === "ig" },
+    targets: { facebook: target.facebook, instagram: target.instagram },
   })
   const status: QueueStatus = outcome.status === "waiting" ? "queued" : outcome.status
   await saveQueuePublish(item.id, {
@@ -329,9 +338,9 @@ export async function processQueue(
   } catch (caught) {
     report.notes.push(`Queue setup: ${message(caught)}`)
   }
-  for (const channel of QUEUE_CHANNELS) {
-    if (channel === "ig" && !meta.igUserId) continue
-    const part = await processChannel(meta, channel, now)
+  for (const channel of await listChannels()) {
+    if (!channel.connected) continue
+    const part = await processChannel(channel.id, now)
     report.published += part.published
     report.notes.push(...part.notes)
   }
@@ -349,14 +358,13 @@ export async function processQueue(
 }
 
 async function processChannel(
-  meta: MetaConfig,
   channel: QueueChannel,
   now: Date
 ): Promise<{ published: number; notes: string[] }> {
   const report = { published: 0, notes: [] as string[] }
   for (const item of await listQueuePublishing(channel)) {
     try {
-      if ((await advanceQueueItem(meta, item)) === "published") report.published++
+      if ((await advanceQueueItem(item)) === "published") report.published++
     } catch (caught) {
       report.notes.push(`Queue ${item.fileName}: ${message(caught)}`)
     }
@@ -365,7 +373,7 @@ async function processChannel(
   const due = await nextDueQueueItem(channel, now.toISOString())
   if (due) {
     try {
-      if ((await advanceQueueItem(meta, due)) === "published") report.published++
+      if ((await advanceQueueItem(due)) === "published") report.published++
     } catch (caught) {
       report.notes.push(`Queue ${due.fileName}: ${message(caught)}`)
     }

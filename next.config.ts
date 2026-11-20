@@ -19,6 +19,7 @@ const nextConfig: NextConfig = {
     "/api/cron/tick": BRANDING_FILES,
     "/queue": BRANDING_FILES,
     "/queue/instagram": BRANDING_FILES,
+    "/queue/c/[channel]": BRANDING_FILES,
   },
 }
 

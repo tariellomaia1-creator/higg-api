@@ -469,9 +469,10 @@ export async function updateCaption(id: string, caption: string): Promise<void> 
 
 export type QueueStatus = "queued" | "publishing" | "published" | "partial" | "failed"
 
-/** Each channel is its own queue with its own times: "fb" posts to the
-    Facebook Page only, "ig" to Instagram only. */
-export type QueueChannel = "fb" | "ig"
+/** Each channel is its own queue with its own times: "fb"/"ig" are BeHero's
+    Facebook Page and Instagram; "fbp_<pageId>"/"igu_<igUserId>" are other
+    pages (daily/channels.ts). */
+export type QueueChannel = string
 
 export type QueueItem = {
   id: string
@@ -499,7 +500,7 @@ export type QueueItem = {
 function toQueueItem(row: Record<string, unknown>): QueueItem {
   return {
     id: String(row.id),
-    channel: row.channel === "ig" ? "ig" : "fb",
+    channel: str(row.channel) ?? "fb",
     position: num(row.position),
     kind: row.kind === "image" ? "image" : "video",
     fileName: str(row.file_name) ?? "",
@@ -565,7 +566,8 @@ export async function insertQueueItems(
     await sql`INSERT INTO post_queue (channel, position, kind, file_name, media_url, media_type, bytes, caption,
         to_facebook, to_instagram, branding)
       VALUES (${channel}, ${position}, ${item.kind}, ${item.fileName}, ${item.mediaUrl}, ${item.mediaType},
-        ${item.bytes}, ${item.caption}, ${channel === "fb"}, ${channel === "ig"}, ${item.branding ?? null})`
+        ${item.bytes}, ${item.caption}, ${channel === "fb" || channel.startsWith("fbp_")},
+        ${channel === "ig" || channel.startsWith("igu_")}, ${item.branding ?? null})`
   }
 }
 
@@ -649,7 +651,15 @@ export async function nextDueQueueItem(channel: QueueChannel, nowIso: string): P
 export async function setQueueBranded(oldUrl: string, url: string, bytes: number): Promise<void> {
   const sql = await db()
   await sql`UPDATE post_queue SET media_url = ${url}, bytes = ${bytes}, media_type = 'video/mp4',
-    branding = 'done', updated_at = now() WHERE media_url = ${oldUrl}`
+    branding = 'done', updated_at = now()
+    WHERE media_url = ${oldUrl} AND (branding IS NULL OR branding <> 'skip')`
+}
+
+/** Queue rows that use this stored file. */
+export async function mediaRefs(url: string): Promise<number> {
+  const sql = await db()
+  const result = await sql`SELECT COUNT(*) AS n FROM post_queue WHERE media_url = ${url}`
+  return num(Array.isArray(result) ? (result[0] as Record<string, unknown>)?.n : 0)
 }
 
 /** Other queue rows that still use this stored file. */
@@ -672,7 +682,8 @@ export async function channelMediaUrls(channel: QueueChannel): Promise<Set<strin
 export async function setQueueBrandingByUrl(url: string, branding: string | null): Promise<void> {
   const sql = await db()
   await sql`UPDATE post_queue SET branding = ${branding}, updated_at = now()
-    WHERE media_url = ${url} AND kind = 'video' AND (branding IS NULL OR branding NOT IN ('done'))`
+    WHERE media_url = ${url} AND kind = 'video' AND channel IN ('fb', 'ig')
+      AND (branding IS NULL OR branding NOT IN ('done'))`
 }
 
 export async function setQueueBrandingError(id: string, error: string | null): Promise<void> {
