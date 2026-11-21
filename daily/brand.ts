@@ -103,6 +103,20 @@ const FILTER =
   "[1:v][0:v]scale2ref=w=main_w*0.42:h=ow*0.22[wm][base];" +
   "[base][wm]overlay=x=(main_w-overlay_w)/2:y=main_h-overlay_h-main_h*0.17:format=auto,format=yuv420p[out]"
 
+/** Size of a video at a URL (ffmpeg reads only what it needs); null when
+    it cannot tell. */
+export async function probeVideoUrl(url: string): Promise<{ width: number; height: number } | null> {
+  try {
+    ffmpegPath ??= findFfmpeg().catch((error: unknown) => {
+      ffmpegPath = null
+      throw error
+    })
+    return parseVideoSize(await run(await ffmpegPath, ["-hide_banner", "-i", url], true))
+  } catch {
+    return null
+  }
+}
+
 /** Burns the badge into the video bytes and returns the new MP4, or null
     when the video is not vertical (a poster) and needs no badge. */
 export async function brandVideoBytes(input: Buffer): Promise<Buffer | null> {
