@@ -159,6 +159,16 @@ export async function distributeCaptionVariants(channel: QueueChannel, onlyPlain
   return changed
 }
 
+/** One-time: BeHero Instagram goes from 10 posts a day to 5 (new default
+    times and kinds), then its queue is re-timed. */
+export async function applyInstagramFiveOnce(): Promise<void> {
+  if (await getSetting("ig_five_per_day_done")) return
+  await setSetting(queueSettingKey("ig", "times"), JSON.stringify(DEFAULT_IG_TIMES))
+  await setSetting(queueSettingKey("ig", "slot_kinds"), JSON.stringify(DEFAULT_IG_SLOT_KINDS))
+  await rescheduleQueue("ig")
+  await setSetting("ig_five_per_day_done", new Date().toISOString())
+}
+
 /** One-time switch from one shared caption to rotating variants for files
     uploaded before variants existed. */
 export async function applyCaptionVariantsOnce(): Promise<void> {
@@ -341,6 +351,7 @@ export async function processQueue(
   const report = { published: 0, notes: [] as string[] }
   try {
     await applyCaptionVariantsOnce()
+    await applyInstagramFiveOnce()
     if (meta.igUserId) await mirrorFacebookBacklogOnce()
   } catch (caught) {
     report.notes.push(`Queue setup: ${message(caught)}`)
