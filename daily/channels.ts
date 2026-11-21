@@ -255,3 +255,62 @@ export async function channelTarget(
     ? { meta: { pageId: page.pageId, token: page.token, igUserId: igId, version: graphVersion() }, facebook: false, instagram: true }
     : null
 }
+
+export type TokenStatus = {
+  /** Which Vercel variable holds the token. */
+  variable: string
+  valid: boolean
+  /** When it stops working (ISO); null = never expires. */
+  expiresAt: string | null
+  error: string | null
+}
+
+let tokenCache: { at: number; list: TokenStatus[] } | null = null
+
+/** Expiry of the Meta tokens in the variables, from Graph's debug_token
+    (a token may inspect itself). The earlier of the token's own expiry and
+    its data-access expiry counts. Cached for an hour. */
+export async function metaTokenStatus(): Promise<TokenStatus[]> {
+  if (tokenCache && Date.now() - tokenCache.at < 60 * 60_000) return tokenCache.list
+  const entries = [
+    ["META_USER_ACCESS_TOKEN", process.env.META_USER_ACCESS_TOKEN?.trim()],
+    ["META_PAGE_ACCESS_TOKEN", process.env.META_PAGE_ACCESS_TOKEN?.trim()],
+  ].filter((entry): entry is [string, string] => Boolean(entry[1]))
+  const list: TokenStatus[] = []
+  for (const [variable, token] of entries) {
+    try {
+      const url = new URL(`https://graph.facebook.com/${graphVersion()}/debug_token`)
+      url.searchParams.set("input_token", token)
+      url.searchParams.set("access_token", token)
+      const response = await fetch(url, { cache: "no-store" })
+      const payload = (await response.json().catch(() => null)) as {
+        data?: { is_valid?: unknown; expires_at?: unknown; data_access_expires_at?: unknown; error?: { message?: unknown } }
+        error?: { message?: unknown }
+      } | null
+      const data = payload?.data
+      if (!response.ok || !data) {
+        const reason = typeof payload?.error?.message === "string" ? payload.error.message : `HTTP ${response.status}`
+        list.push({ variable, valid: false, expiresAt: null, error: reason })
+        continue
+      }
+      const times = [data.expires_at, data.data_access_expires_at]
+        .map((value) => (typeof value === "number" && value > 0 ? value * 1000 : null))
+        .filter((value): value is number => value !== null)
+      list.push({
+        variable,
+        valid: data.is_valid === true,
+        expiresAt: times.length ? new Date(Math.min(...times)).toISOString() : null,
+        error:
+          data.is_valid === true
+            ? null
+            : typeof data.error?.message === "string"
+              ? data.error.message
+              : "token აღარ მუშაობს",
+      })
+    } catch (caught) {
+      list.push({ variable, valid: false, expiresAt: null, error: caught instanceof Error ? caught.message : String(caught) })
+    }
+  }
+  tokenCache = { at: Date.now(), list }
+  return list
+}

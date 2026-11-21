@@ -4,8 +4,8 @@ import { del } from "@vercel/blob"
 
 import { parseBlocks } from "./blocks"
 import { formatVariants } from "./caption-variants"
-import { discoverPages, listChannels, saveExtraChannels } from "./channels"
-import type { ChannelInfo, DiscoveredPage } from "./channels"
+import { discoverPages, listChannels, metaTokenStatus, saveExtraChannels } from "./channels"
+import type { ChannelInfo, DiscoveredPage, TokenStatus } from "./channels"
 import {
   deleteQueueItem,
   getQueueItem,
@@ -74,6 +74,8 @@ export type QueueView = {
   channels: ChannelInfo[]
   /** Other pages the Meta user token can post to, for the page picker. */
   pages: { list: DiscoveredPage[]; error: string | null; configured: boolean }
+  /** Expiry of the Meta tokens, to renew them in time. */
+  tokens: TokenStatus[]
   items: QueueItem[]
   settings: QueueSettings
   lastTickAt: string | null
@@ -98,19 +100,21 @@ export async function getQueueView(channelInput: unknown): Promise<Result<QueueV
     const current = channels.find((entry) => entry.id === requested) ?? channels[0]!
     const channel = current.id
     await fillEmptyQueueCaptions(channel, (await readQueueSettings(channel)).defaultCaption)
-    const [items, settings, lastTickAt, queueBytes, variants, pages] = await Promise.all([
+    const [items, settings, lastTickAt, queueBytes, variants, pages, tokens] = await Promise.all([
       listQueue(channel),
       readQueueSettings(channel),
       getSetting("last_tick_at"),
       queueStorageBytes(),
       readCaptionVariants(channel),
       discoverPages(),
+      metaTokenStatus(),
     ])
     return {
       channel,
       current,
       channels,
       pages: { list: pages.pages, error: pages.error, configured: pages.configured },
+      tokens,
       items,
       settings,
       lastTickAt,
