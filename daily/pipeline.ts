@@ -4,6 +4,7 @@ import { del } from "@vercel/blob"
 
 import { isBlobUrl, readFile, signedReadUrl, storeFile } from "./blob-server"
 import { postToMeta } from "./publish"
+import { beheroMeta } from "./channels"
 import { processQueue } from "./queue"
 import { buildCaption } from "./caption"
 import sharp from "sharp"
@@ -43,7 +44,6 @@ import {
   kieApiKey,
   veoLiteTask,
 } from "./kie"
-import { metaConfig } from "./meta"
 import type { MetaConfig } from "./meta"
 
 export type TickReport = {
@@ -155,7 +155,7 @@ export async function runTick(
   }
 
   // 3. Publishing.
-  const meta = metaConfig()
+  const meta = await beheroMeta()
   if (!meta) {
     report.notes.push("Meta is not connected; publishing skipped.")
     return report
@@ -226,7 +226,7 @@ export async function generateItemNow(item: DailyItem): Promise<void> {
 
 /** Posts one finished slot right away, ignoring its scheduled hour. */
 export async function publishItemNow(item: DailyItem): Promise<PublishStatus> {
-  const meta = metaConfig()
+  const meta = await beheroMeta()
   if (!meta) throw new Error("Meta is not connected (META_PAGE_ID / META_PAGE_ACCESS_TOKEN).")
   if (item.status !== "ready" || !item.resultUrl)
     throw new Error("ჯერ მასალა უნდა დამზადდეს.")
@@ -238,7 +238,7 @@ export async function publishItemNow(item: DailyItem): Promise<PublishStatus> {
 /** Moves posts that are still processing (Instagram Reels) forward. Called
     by the open planner so their status updates without the scheduler. */
 export async function continuePublishing(): Promise<number> {
-  const meta = metaConfig()
+  const meta = await beheroMeta()
   if (!meta) return 0
   let published = 0
   for (const item of await listPublishing())

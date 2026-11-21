@@ -46,12 +46,34 @@ function graphVersion(): string {
 
 let cache: { at: number; pages: PageWithToken[] } | null = null
 
-/** Pages the META_USER_ACCESS_TOKEN can manage, with their Instagram
-    accounts. Cached for 10 minutes per server instance. */
+/** Tokens that may be a user token: META_USER_ACCESS_TOKEN, and
+    META_PAGE_ACCESS_TOKEN too, in case a user token was put there. */
+function userTokenCandidates(): string[] {
+  const list = [process.env.META_USER_ACCESS_TOKEN?.trim(), process.env.META_PAGE_ACCESS_TOKEN?.trim()]
+  return [...new Set(list.filter((token): token is string => Boolean(token)))]
+}
+
+/** Pages a user token can manage, with their Instagram accounts and page
+    tokens. Tries each candidate token (a page token cannot list pages).
+    Cached for 10 minutes per server instance. */
 async function pagesWithTokens(): Promise<PageWithToken[]> {
-  const token = process.env.META_USER_ACCESS_TOKEN?.trim()
-  if (!token) return []
+  const tokens = userTokenCandidates()
+  if (tokens.length === 0) return []
   if (cache && Date.now() - cache.at < 10 * 60_000) return cache.pages
+  let lastError: Error | null = null
+  for (const token of tokens) {
+    try {
+      const pages = await listPages(token)
+      cache = { at: Date.now(), pages }
+      return pages
+    } catch (caught) {
+      lastError = caught instanceof Error ? caught : new Error(String(caught))
+    }
+  }
+  throw lastError ?? new Error("Meta გვერდების სია ვერ წამოვიდა.")
+}
+
+async function listPages(token: string): Promise<PageWithToken[]> {
   const url = new URL(`https://graph.facebook.com/${graphVersion()}/me/accounts`)
   url.searchParams.set("fields", "id,name,access_token,instagram_business_account{id,username}")
   url.searchParams.set("limit", "100")
@@ -66,7 +88,7 @@ async function pagesWithTokens(): Promise<PageWithToken[]> {
     }>
     error?: { message?: unknown }
   } | null
-  if (!response.ok || !payload || payload.error) {
+  if (!response.ok || !payload || payload.error || !Array.isArray(payload.data)) {
     const reason = typeof payload?.error?.message === "string" ? payload.error.message : `HTTP ${response.status}`
     throw new Error(`Meta გვერდების სია ვერ წამოვიდა: ${reason}`)
   }
@@ -85,22 +107,39 @@ async function pagesWithTokens(): Promise<PageWithToken[]> {
       },
     ]
   })
-  cache = { at: Date.now(), pages }
   return pages
+}
+
+/** BeHero's Meta settings with a real page token: when a user token sits
+    in the variables, BeHero's page token is taken from its page list, so
+    either kind of token in META_PAGE_ACCESS_TOKEN works. */
+export async function beheroMeta(): Promise<MetaConfig | null> {
+  const base = metaConfig()
+  if (!base) return null
+  try {
+    const page = (await pagesWithTokens()).find((entry) => entry.pageId === base.pageId)
+    if (page) return { ...base, token: page.token }
+  } catch {
+    // Not a user token: use the page token as given.
+  }
+  return base
 }
 
 /** The other pages (not BeHero's), without tokens, for the page picker. */
 export async function discoverPages(): Promise<{ pages: DiscoveredPage[]; error: string | null; configured: boolean }> {
-  const configured = Boolean(process.env.META_USER_ACCESS_TOKEN?.trim())
-  if (!configured) return { pages: [], error: null, configured }
+  const explicit = Boolean(process.env.META_USER_ACCESS_TOKEN?.trim())
+  if (userTokenCandidates().length === 0) return { pages: [], error: null, configured: false }
   try {
     const behero = metaConfig()?.pageId
-    const pages = (await pagesWithTokens())
+    const all = await pagesWithTokens()
+    const pages = all
       .filter((page) => page.pageId !== behero)
       .map(({ pageId, name, instagram }) => ({ pageId, name, instagram }))
-    return { pages, error: null, configured }
+    return { pages, error: null, configured: true }
   } catch (caught) {
-    return { pages: [], error: caught instanceof Error ? caught.message : String(caught), configured }
+    // Only a page token is set: no other pages, and nothing to report.
+    if (!explicit) return { pages: [], error: null, configured: false }
+    return { pages: [], error: caught instanceof Error ? caught.message : String(caught), configured: true }
   }
 }
 
@@ -199,7 +238,7 @@ export async function channelTarget(
   channel: QueueChannel
 ): Promise<{ meta: MetaConfig; facebook: boolean; instagram: boolean } | null> {
   if (isBeheroChannel(channel)) {
-    const meta = metaConfig()
+    const meta = await beheroMeta()
     if (!meta || (channel === "ig" && !meta.igUserId)) return null
     return { meta, facebook: channel === "fb", instagram: channel === "ig" }
   }
