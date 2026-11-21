@@ -70,19 +70,55 @@ function idOf(data: Record<string, unknown>): string {
   return String(id)
 }
 
+/** Publishes a vertical video as a Facebook Reel (Reels reach people who
+    do not follow the page; plain page videos mostly reach followers):
+    start an upload session, let Facebook fetch the file, then publish.
+    Returns the video id. */
+export async function publishFacebookReel(config: MetaConfig, mediaUrl: string, caption: string): Promise<string> {
+  const started = await graph(config, "POST", `${config.pageId}/video_reels`, { upload_phase: "start" })
+  const videoId = typeof started.video_id === "string" || typeof started.video_id === "number" ? String(started.video_id) : null
+  if (!videoId) throw new MetaError("Meta did not return a Reel upload id")
+  const upload = await fetch(`https://rupload.facebook.com/video-upload/${config.version}/${videoId}`, {
+    method: "POST",
+    headers: { Authorization: `OAuth ${config.token}`, file_url: mediaUrl },
+    cache: "no-store",
+  })
+  const uploaded = (await upload.json().catch(() => null)) as { success?: unknown; debug_info?: { message?: unknown } } | null
+  if (!upload.ok || uploaded?.success !== true) {
+    const reason = typeof uploaded?.debug_info?.message === "string" ? uploaded.debug_info.message : `HTTP ${upload.status}`
+    throw new MetaError(`Reel upload failed: ${reason}`)
+  }
+  await graph(config, "POST", `${config.pageId}/video_reels`, {
+    upload_phase: "finish",
+    video_id: videoId,
+    video_state: "PUBLISHED",
+    description: caption,
+  })
+  return videoId
+}
+
 export async function publishFacebook(
   config: MetaConfig,
   kind: "video" | "poster",
   mediaUrl: string,
-  caption: string
+  caption: string,
+  options: { reel?: boolean } = {}
 ): Promise<string> {
-  if (kind === "video")
+  if (kind === "video") {
+    if (options.reel !== false) {
+      try {
+        return await publishFacebookReel(config, mediaUrl, caption)
+      } catch {
+        // Not accepted as a Reel (format, length): post a plain video.
+      }
+    }
     return idOf(
       await graph(config, "POST", `${config.pageId}/videos`, {
         file_url: mediaUrl,
         description: caption,
       })
     )
+  }
   return idOf(
     await graph(config, "POST", `${config.pageId}/photos`, {
       url: mediaUrl,

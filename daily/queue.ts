@@ -4,7 +4,7 @@ import { del } from "@vercel/blob"
 import sharp from "sharp"
 
 import { readFile, signedReadUrl } from "./blob-server"
-import { brandStoredVideo } from "./brand"
+import { brandStoredVideo, isVerticalVideo, probeVideoUrl } from "./brand"
 import { CAPTION_VARIANTS, parseVariants } from "./caption-variants"
 import { channelTarget, isBeheroChannel, listChannels } from "./channels"
 import {
@@ -300,7 +300,14 @@ export async function advanceQueueItem(item: QueueItem): Promise<QueueStatus> {
       return "failed"
     }
   }
+  // Facebook Reels take vertical videos only; badged videos are vertical.
+  let reel = true
+  if (!continuing && media && target.facebook && item.kind === "video" && item.branding !== "done") {
+    const size = await probeVideoUrl(media)
+    reel = size === null || isVerticalVideo(size)
+  }
   const outcome = await postToMeta(target.meta, {
+    reel,
     kind: item.kind === "video" ? "video" : "poster",
     mediaUrl: media,
     caption: item.caption || settings.defaultCaption,

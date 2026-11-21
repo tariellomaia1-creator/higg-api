@@ -39,6 +39,9 @@ export async function postToMeta(
     continuing: boolean
     previousError: string | null
     targets: { facebook: boolean; instagram: boolean }
+    /** Post a video to Facebook as a Reel (default); false for videos that
+        are not vertical, which Reels do not take. */
+    reel?: boolean
   }
 ): Promise<MetaPostOutcome> {
   const errors: string[] = input.continuing && input.previousError ? [input.previousError] : []
@@ -48,7 +51,7 @@ export async function postToMeta(
 
   if (input.targets.facebook && !fbPostId && !input.continuing && media) {
     try {
-      fbPostId = await publishFacebook(meta, input.kind, media, input.caption)
+      fbPostId = await publishFacebook(meta, input.kind, media, input.caption, { reel: input.reel })
     } catch (caught) {
       errors.push(`Facebook: ${message(caught)}`)
     }
