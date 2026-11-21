@@ -774,7 +774,7 @@ function SettingsPanel({
           value={times}
           onChange={(event) => setTimes(event.target.value)}
           className="h-9 rounded-lg border border-input bg-input/30 px-3 text-sm"
-          placeholder={view.channel === "ig" ? "09:00, 10:30, 12:00, …" : "10:00, 13:00, 17:00, 21:00, 23:00"}
+          placeholder={view.channel === "ig" ? "09:30, 12:30, 15:30, 19:30, 22:00" : "10:00, 13:00, 17:00, 21:00, 23:00"}
         />
       </label>
       {parsedTimes.length ? (

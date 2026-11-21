@@ -28,6 +28,7 @@ import { metaConfig } from "./meta"
 import {
   advanceQueueItem,
   applyCaptionVariantsOnce,
+  applyInstagramFiveOnce,
   asChannel,
   copyToChannel,
   mirrorFacebookBacklogOnce,
@@ -94,6 +95,7 @@ async function fillEmptyQueueCaptions(channel: QueueChannel, caption: string): P
 export async function getQueueView(channelInput: unknown): Promise<Result<QueueView>> {
   return guard(async () => {
     await applyCaptionVariantsOnce()
+    await applyInstagramFiveOnce()
     if (metaConfig()?.igUserId) await mirrorFacebookBacklogOnce()
     const channels = await listChannels()
     const requested = asChannel(channelInput)
