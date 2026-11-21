@@ -235,6 +235,7 @@ export function QueuePlanner({ channel }: { channel: QueueChannel }) {
       {view ? (
         <>
           <SupplyPanel items={waiting} />
+          <TokenPanel tokens={view.tokens} />
           <StatusStrip view={view} cronOk={cronOk} lastTick={lastTick} />
           <PagesPanel key={view.channels.map((entry) => entry.id).join(",")} view={view} onAct={act} onNotice={setNotice} />
           <SettingsPanel view={view} onSaved={load} onError={setError} />
@@ -548,6 +549,47 @@ function CaptionVariantsPanel({
         </div>
       </div>
     </details>
+  )
+}
+
+/** When the Meta tokens stop working; red in the last week or once invalid,
+    with how to renew. */
+function TokenPanel({ tokens }: { tokens: QueueView["tokens"] }) {
+  const [now] = useState(() => Date.now())
+  if (tokens.length === 0) return null
+  const rows = tokens.map((token) => {
+    const days = token.expiresAt ? Math.floor((Date.parse(token.expiresAt) - now) / DAY_MS) : null
+    const urgent = !token.valid || (days !== null && days <= 7)
+    const text = !token.valid
+      ? `აღარ მუშაობს${token.error ? `: ${token.error}` : ""}`
+      : days === null
+        ? "უვადოა ✓"
+        : days <= 0
+          ? "იწურება დღეს"
+          : `იწურება ${days} დღეში (${formatDay(Date.parse(token.expiresAt!))})`
+    return { ...token, urgent, text }
+  })
+  const urgent = rows.some((row) => row.urgent)
+  return (
+    <section
+      role="status"
+      className={cn(
+        "flex flex-col gap-1 rounded-2xl border p-4 text-sm",
+        urgent ? "border-destructive/40 bg-destructive/10" : "border-border bg-card"
+      )}
+    >
+      {rows.map((row) => (
+        <p key={row.variable} className={cn(row.urgent && "font-medium text-destructive")}>
+          <span className="text-muted-foreground">Meta token</span> <code className="text-xs">{row.variable}</code>: {row.text}
+        </p>
+      ))}
+      {urgent ? (
+        <p className="text-xs text-muted-foreground">
+          განახლება: Graph API Explorer → Generate Access Token → ⓘ → Extend Access Token → ჩასვი Vercel-ში იმავე
+          ცვლადში → Redeploy.
+        </p>
+      ) : null}
+    </section>
   )
 }
 
