@@ -188,6 +188,20 @@ export async function saveExtraChannels(ids: unknown): Promise<void> {
   await setSetting("extra_channels", JSON.stringify(chosen))
 }
 
+/** Switches on a page's Facebook channel and, if linked, its Instagram one,
+    keeping the channels already on. Returns the page's channel ids, or null
+    when the token cannot see the page (yet). */
+export async function enablePageChannels(pageId: string): Promise<QueueChannel[] | null> {
+  const { pages, error } = await discoverPages()
+  if (error) return null
+  const page = pages.find((entry) => entry.pageId === pageId)
+  if (!page) return null
+  const ids = [`fbp_${page.pageId}`, ...(page.instagram ? [`igu_${page.instagram.id}`] : [])]
+  const current = (await storedExtras()).map((entry) => entry.id)
+  if (ids.some((id) => !current.includes(id))) await saveExtraChannels([...new Set([...current, ...ids])])
+  return ids
+}
+
 /** Every channel shown and processed: BeHero's two, then the extras. */
 export async function listChannels(): Promise<ChannelInfo[]> {
   const meta = metaConfig()
