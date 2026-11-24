@@ -30,6 +30,7 @@ import {
   applyCaptionVariantsOnce,
   applyInstagramFiveOnce,
   asChannel,
+  setupGmonrealOnce,
   copyToChannel,
   mirrorFacebookBacklogOnce,
   distributeCaptionVariants,
@@ -96,6 +97,7 @@ export async function getQueueView(channelInput: unknown): Promise<Result<QueueV
   return guard(async () => {
     await applyCaptionVariantsOnce()
     await applyInstagramFiveOnce()
+    await setupGmonrealOnce()
     if (metaConfig()?.igUserId) await mirrorFacebookBacklogOnce()
     const channels = await listChannels()
     const requested = asChannel(channelInput)

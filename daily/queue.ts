@@ -5,8 +5,8 @@ import sharp from "sharp"
 
 import { readFile, signedReadUrl } from "./blob-server"
 import { brandStoredVideo, isVerticalVideo, probeVideoUrl } from "./brand"
-import { CAPTION_VARIANTS, parseVariants } from "./caption-variants"
-import { channelTarget, isBeheroChannel, listChannels } from "./channels"
+import { CAPTION_VARIANTS, GMONREAL_PAGE_ID, GMONREAL_TIMES, GMONREAL_VARIANTS, parseVariants } from "./caption-variants"
+import { channelTarget, enablePageChannels, isBeheroChannel, listChannels } from "./channels"
 import {
   channelMediaUrls,
   clearQueueMedia,
@@ -131,7 +131,8 @@ export async function saveCaptionVariants(channel: QueueChannel, text: string): 
     so the same file posted on both channels rarely shares a caption. */
 export function pickVariant(variants: string[], channel: QueueChannel, n: number): string {
   if (variants.length === 0) return ""
-  const offset = channel === "ig" ? Math.floor(variants.length / 2) : 0
+  const instagram = channel === "ig" || channel.startsWith("igu_")
+  const offset = instagram ? Math.floor(variants.length / 2) : 0
   return variants[(n + offset) % variants.length] ?? ""
 }
 
@@ -157,6 +158,29 @@ export async function distributeCaptionVariants(channel: QueueChannel, onlyPlain
     }
   }
   return changed
+}
+
+/** One-time setup of GMonreal Studio: its page channels are switched on,
+    get the English ad captions (unless captions were already written) and
+    UK-friendly times (unless times were already set), and the files
+    already waiting get different captions and join its Instagram queue. Retried until the token can see
+    the page. */
+export async function setupGmonrealOnce(): Promise<void> {
+  if (await getSetting("gmonreal_setup_done")) return
+  const channels = await enablePageChannels(GMONREAL_PAGE_ID)
+  if (!channels) return
+  for (const channel of channels) {
+    if (!(await getSetting(variantsKey(channel))))
+      await setSetting(variantsKey(channel), JSON.stringify(GMONREAL_VARIANTS))
+    if (!(await getSetting(queueSettingKey(channel, "times"))))
+      await setSetting(queueSettingKey(channel, "times"), JSON.stringify(GMONREAL_TIMES))
+    await distributeCaptionVariants(channel, true)
+    await rescheduleQueue(channel)
+  }
+  // Files already uploaded to the Facebook queue also go to Instagram.
+  const [facebook, instagram] = channels
+  if (facebook && instagram) await copyToChannel(instagram, await listQueuedInOrder(facebook))
+  await setSetting("gmonreal_setup_done", new Date().toISOString())
 }
 
 /** One-time: BeHero Instagram goes from 10 posts a day to 5 (new default
@@ -352,6 +376,7 @@ export async function processQueue(
   try {
     await applyCaptionVariantsOnce()
     await applyInstagramFiveOnce()
+    await setupGmonrealOnce()
     if (meta.igUserId) await mirrorFacebookBacklogOnce()
   } catch (caught) {
     report.notes.push(`Queue setup: ${message(caught)}`)
