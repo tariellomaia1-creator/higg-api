@@ -12,7 +12,9 @@ export type MetaConfig = {
 
 export function metaConfig(): MetaConfig | null {
   const pageId = process.env.META_PAGE_ID?.trim()
-  const token = process.env.META_PAGE_ACCESS_TOKEN?.trim()
+  // A user token alone is enough: BeHero's page token is then taken from its
+  // page list (daily/channels.ts beheroMeta).
+  const token = process.env.META_PAGE_ACCESS_TOKEN?.trim() || process.env.META_USER_ACCESS_TOKEN?.trim()
   if (!pageId || !token) return null
   return {
     pageId,

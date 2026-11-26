@@ -1,10 +1,10 @@
 "use server"
 
-import { del } from "@vercel/blob"
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 
 import { blobConfigured } from "./blob"
+import { deleteStoredFile, isBlobUrl as isStoredUrl } from "./blob-server"
 import { buildCaption } from "./caption"
 import {
   SESSION_COOKIE,
@@ -169,15 +169,7 @@ function asKind(value: unknown): ItemKind {
 }
 
 function isOwnBlobUrl(value: string): boolean {
-  try {
-    const url = new URL(value)
-    return (
-      url.protocol === "https:" &&
-      url.hostname.endsWith(".blob.vercel-storage.com")
-    )
-  } catch {
-    return false
-  }
+  return isStoredUrl(value)
 }
 
 /** Which slots are already taken from `from` for `days` days, so a batch
@@ -420,7 +412,7 @@ async function removeBlobs(urls: string[]): Promise<void> {
   const own = urls.filter(isOwnBlobUrl)
   if (own.length === 0 || !blobConfigured()) return
   try {
-    await del(own)
+    await deleteStoredFile(own)
   } catch (caught) {
     console.error("[daily] could not delete blobs", caught)
   }

@@ -16,7 +16,9 @@ import {
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
+/** A file this app stored (Vercel Blob, or "local:" on the server's disk). */
 function isBlobUrl(url: string): boolean {
+  if (url.startsWith("local:")) return true
   try {
     return new URL(url).hostname.endsWith(".blob.vercel-storage.com")
   } catch {
