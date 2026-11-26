@@ -1,13 +1,25 @@
 import "server-only"
 
-import { get, issueSignedToken, presignUrl, put } from "@vercel/blob"
+import { del, get, issueSignedToken, presignUrl, put } from "@vercel/blob"
+
+import {
+  deleteLocalFile,
+  isLocalUrl,
+  localStorageEnabled,
+  openLocalFile,
+  signedLocalUrl,
+  storeLocalFile,
+} from "./local-storage"
 
 /** Vercel Blob helpers that work whether the store was created public or
     private. Newer stores are often private: their URLs cannot be opened by a
     browser or by kie.ai, so reads go through the SDK and the browser gets the
     file through /api/daily/media. */
 
+/** A file this app stored: in Vercel Blob, or on the server's disk
+    ("local:…", see daily/local-storage.ts). */
 export function isBlobUrl(value: string): boolean {
+  if (isLocalUrl(value)) return true
   try {
     const url = new URL(value)
     return (
@@ -25,6 +37,7 @@ export async function storeFile(
   body: Buffer,
   contentType: string
 ): Promise<string> {
+  if (localStorageEnabled()) return storeLocalFile(pathname, body)
   try {
     const blob = await put(pathname, body, {
       access: "public",
@@ -54,6 +67,7 @@ export async function openFile(
   url: string,
   range?: string | null
 ): Promise<Response> {
+  if (isLocalUrl(url)) return openLocalFile(url, range)
   const headers = range ? { Range: range } : undefined
   for (const access of ["private", "public"] as const) {
     try {
@@ -92,6 +106,7 @@ export async function readFile(
 /** A URL anyone (Meta, kie.ai) can download for a limited time, without
     copying the file. Public stores already have public URLs. */
 export async function signedReadUrl(url: string, hours = 12): Promise<string> {
+  if (isLocalUrl(url)) return signedLocalUrl(url, hours)
   const parsed = new URL(url)
   if (parsed.hostname.includes(".public.")) return url
   const pathname = decodeURIComponent(parsed.pathname.replace(/^\//, ""))
@@ -104,4 +119,13 @@ export async function signedReadUrl(url: string, hours = 12): Promise<string> {
     access: "private",
   })
   return presignedUrl
+}
+
+/** Deletes a stored file (Blob or local disk); missing files are ignored. */
+export async function deleteStoredFile(url: string | string[]): Promise<void> {
+  const list = Array.isArray(url) ? url : [url]
+  const local = list.filter(isLocalUrl)
+  const remote = list.filter((entry) => !isLocalUrl(entry))
+  await Promise.all(local.map((entry) => deleteLocalFile(entry).catch(() => undefined)))
+  if (remote.length) await del(remote).catch(() => undefined)
 }

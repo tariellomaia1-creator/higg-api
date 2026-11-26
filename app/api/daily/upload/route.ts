@@ -3,22 +3,9 @@ import { handleUploadPresigned } from "@vercel/blob/client"
 import type { HandleUploadPresignedBody } from "@vercel/blob/client"
 import { NextResponse } from "next/server"
 
-import { blobConfigured } from "@/daily/blob"
+import { blobConfigured, usesVercelBlob } from "@/daily/blob"
+import { limitsFor } from "@/daily/upload-limits"
 import { requireSession } from "@/daily/session"
-
-const START_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"]
-const START_IMAGE_MAX_BYTES = 20 * 1024 * 1024
-/** Finished videos and images for the auto-posting queue. */
-const QUEUE_TYPES = ["video/mp4", "video/quicktime", "image/jpeg", "image/png", "image/webp"]
-const QUEUE_MAX_BYTES = 1024 * 1024 * 1024
-
-function limitsFor(pathname: string) {
-  if (pathname.startsWith("daily/start/"))
-    return { types: START_IMAGE_TYPES, maxBytes: START_IMAGE_MAX_BYTES }
-  if (pathname.startsWith("daily/queue/"))
-    return { types: QUEUE_TYPES, maxBytes: QUEUE_MAX_BYTES }
-  throw new Error("Invalid upload path.")
-}
 
 /** Why an upload cannot start, in words the planner can show. The Blob client
     reports any refused request with one generic message. */
@@ -30,7 +17,8 @@ export async function GET(): Promise<NextResponse> {
     signedIn = false
   }
   return NextResponse.json(
-    { signedIn, blobConfigured: blobConfigured() },
+    // "local": files go to the server's disk through /api/daily/upload/local.
+    { signedIn, blobConfigured: blobConfigured(), storage: usesVercelBlob() ? "blob" : "local" },
     { headers: { "Cache-Control": "no-store" } }
   )
 }
@@ -46,11 +34,11 @@ export async function POST(request: Request): Promise<NextResponse> {
   } catch {
     return NextResponse.json({ error: "Sign in first." }, { status: 401 })
   }
-  if (!blobConfigured())
+  if (!usesVercelBlob())
     return NextResponse.json(
       {
         error:
-          "File storage is not connected. In Vercel, open Storage, create a Blob store and connect it to this project.",
+          "Files are stored on this server: upload through /api/daily/upload/local.",
       },
       { status: 503 }
     )

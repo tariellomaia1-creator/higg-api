@@ -1,9 +1,8 @@
 import "server-only"
 
-import { del } from "@vercel/blob"
 import sharp from "sharp"
 
-import { readFile, signedReadUrl } from "./blob-server"
+import { deleteStoredFile, readFile, signedReadUrl } from "./blob-server"
 import { brandStoredVideo, isVerticalVideo, probeVideoUrl } from "./brand"
 import { CAPTION_VARIANTS, GMONREAL_PAGE_ID, GMONREAL_TIMES, GMONREAL_VARIANTS, parseVariants } from "./caption-variants"
 import { channelTarget, enablePageChannels, isBeheroChannel, listChannels } from "./channels"
@@ -288,7 +287,7 @@ export async function brandQueueItem(item: QueueItem): Promise<QueueItem> {
       return { ...item, branding: "skip" }
     }
     await setQueueBranded(item.mediaUrl, branded.url, branded.bytes)
-    if ((await mediaRefs(item.mediaUrl)) === 0) await del(item.mediaUrl).catch(() => undefined)
+    if ((await mediaRefs(item.mediaUrl)) === 0) await deleteStoredFile(item.mediaUrl).catch(() => undefined)
     return { ...item, mediaUrl: branded.url, bytes: branded.bytes, mediaType: "video/mp4", branding: "done" }
   } catch (caught) {
     const reason = `ლოგო ვერ დაედო: ${message(caught)}`.slice(0, 500)
@@ -359,7 +358,7 @@ export async function advanceQueueItem(item: QueueItem): Promise<QueueStatus> {
     error: outcome.error,
   })
   if (status === "published" && item.mediaUrl && settings.deleteAfter) {
-    if ((await otherMediaRefs(item.mediaUrl, item.id)) === 0) await del(item.mediaUrl).catch(() => undefined)
+    if ((await otherMediaRefs(item.mediaUrl, item.id)) === 0) await deleteStoredFile(item.mediaUrl).catch(() => undefined)
     await clearQueueMedia(item.id)
   }
   return status

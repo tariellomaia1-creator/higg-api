@@ -1,6 +1,5 @@
 "use client"
 
-import { uploadPresigned } from "@vercel/blob/client"
 import {
   AlertTriangle,
   CalendarClock,
@@ -31,6 +30,7 @@ import {
   queueMediaLink,
   redistributeQueueCaptions,
   refreshQueuePublishing,
+  removeUnreachableQueueItems,
   removeQueueItem,
   retryQueueItem,
   saveQueueCaption,
@@ -46,9 +46,10 @@ import type { SlotKind } from "@/daily/queue-schedule"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
+import { uploadStoredFile } from "./upload-file"
+
 
 const ACCEPTED = ["video/mp4", "video/quicktime", "image/jpeg", "image/png", "image/webp"]
-const MULTIPART_FROM = 40 * 1024 * 1024
 
 const STATUS: Record<QueueItem["status"], { label: string; tone: string }> = {
   queued: { label: "რიგში", tone: "bg-muted text-muted-foreground" },
@@ -164,15 +165,10 @@ export function QueuePlanner({ channel }: { channel: QueueChannel }) {
       setUpload({ done: index, total: files.length, percent: 0 })
       try {
         const safeName = file.name.replace(/[^\w.-]+/g, "_").slice(-80)
-        const blob = await uploadPresigned(`daily/queue/${safeName}`, file, {
-          access: "public",
-          handleUploadUrl: "/api/daily/upload",
-          contentType: file.type,
-          multipart: file.size > MULTIPART_FROM,
-          onUploadProgress: ({ percentage }) =>
-            setUpload({ done: index, total: files.length, percent: Math.round(percentage) }),
-        })
-        uploaded.push({ url: blob.url, mediaType: file.type, bytes: file.size, fileName: file.name })
+        const url = await uploadStoredFile(`daily/queue/${safeName}`, file, (percent) =>
+          setUpload({ done: index, total: files.length, percent })
+        )
+        uploaded.push({ url, mediaType: file.type, bytes: file.size, fileName: file.name })
       } catch (caught) {
         setError(`${file.name}: ${caught instanceof Error ? caught.message : "ატვირთვა ვერ მოხერხდა."}`)
       }
@@ -234,6 +230,26 @@ export function QueuePlanner({ channel }: { channel: QueueChannel }) {
 
       {view ? (
         <>
+          {view.unreachable ? (
+            <section role="alert" className="flex flex-wrap items-center gap-3 rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-sm">
+              <p className="flex-1">
+                რიგში {view.unreachable} ფაილი ძველ საცავშია (Vercel) და ამ სერვერიდან აღარ იკითხება. მოხსენი რიგიდან და
+                თავიდან ატვირთე.
+              </p>
+              <Button
+                variant="destructive"
+                onClick={() =>
+                  void act(async () => {
+                    const result = await removeUnreachableQueueItems()
+                    if (result.ok) setNotice(`რიგიდან მოიხსნა ${result.data} ძველი ფაილი.`)
+                    return result
+                  })
+                }
+              >
+                მოხსნა
+              </Button>
+            </section>
+          ) : null}
           <SupplyPanel items={waiting} />
           <TokenPanel tokens={view.tokens} />
           <StatusStrip view={view} cronOk={cronOk} lastTick={lastTick} />

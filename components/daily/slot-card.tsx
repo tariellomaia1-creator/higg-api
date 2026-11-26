@@ -1,6 +1,5 @@
 "use client"
 
-import { uploadPresigned } from "@vercel/blob/client"
 import {
   Download,
   ImagePlus,
@@ -29,6 +28,7 @@ import type { DailyItem } from "@/daily/db"
 
 import { Button } from "@/components/ui/button"
 import { downloadSrc, fileNameFor, mediaSrc, ResultPreview } from "./media"
+import { uploadStoredFile } from "./upload-file"
 import { StageState, StepStrip } from "./progress"
 import { cn } from "@/lib/utils"
 
@@ -102,16 +102,8 @@ export function SlotCard({
     setBusy("upload")
     try {
       const extension = file.type.split("/")[1] ?? "jpg"
-      const blob = await uploadPresigned(
-        `daily/start/${day}-video-${slot + 1}.${extension}`,
-        file,
-        {
-          access: "public",
-          handleUploadUrl: "/api/daily/upload",
-          contentType: file.type,
-        }
-      )
-      setImage({ url: blob.url, bytes: file.size })
+      const url = await uploadStoredFile(`daily/start/${day}-video-${slot + 1}.${extension}`, file)
+      setImage({ url, bytes: file.size })
     } catch (caught) {
       setError(await explainUploadFailure(caught))
     } finally {

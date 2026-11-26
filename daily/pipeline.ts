@@ -1,8 +1,7 @@
 import "server-only"
 
-import { del } from "@vercel/blob"
 
-import { isBlobUrl, readFile, signedReadUrl, storeFile } from "./blob-server"
+import { deleteStoredFile, isBlobUrl, readFile, signedReadUrl, storeFile } from "./blob-server"
 import { postToMeta } from "./publish"
 import { beheroMeta } from "./channels"
 import { processQueue } from "./queue"
@@ -262,7 +261,7 @@ export async function pollInFlight(
         try {
           const stored = await storeResult(item, task.url)
           finished = await markReady(item.id, stored.url, stored.bytes)
-          if (!finished) await del(stored.url).catch(() => undefined)
+          if (!finished) await deleteStoredFile(stored.url).catch(() => undefined)
         } catch (caught) {
           const reason = `საცავში შენახვა ვერ მოხერხდა (${message(caught)}). ნაჩვენებია kie.ai-ის დროებითი ბმული: ჩამოტვირთე დღესვე.`
           finished = await markReady(item.id, task.url, 0)

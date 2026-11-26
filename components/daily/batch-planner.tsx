@@ -1,6 +1,5 @@
 "use client"
 
-import { uploadPresigned } from "@vercel/blob/client"
 import {
   AlertTriangle,
   ArrowDown,
@@ -27,6 +26,8 @@ import { parseBlocks } from "@/daily/blocks"
 
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+
+import { uploadStoredFile } from "./upload-file"
 
 type Photo = { id: string; file: File; preview: string }
 
@@ -217,18 +218,14 @@ export function BatchPlanner() {
         try {
           const file = row.video.photo.file
           const extension = file.type.split("/")[1] ?? "jpg"
-          const blob = await uploadPresigned(`daily/start/${row.day}-video-${row.video.slot + 1}.${extension}`, file, {
-            access: "public",
-            handleUploadUrl: "/api/daily/upload",
-            contentType: file.type,
-          })
+          const startImageUrl = await uploadStoredFile(`daily/start/${row.day}-video-${row.video.slot + 1}.${extension}`, file)
           const saved = await savePlanItem({
             day: row.day,
             kind: "video",
             slot: row.video.slot,
             prompt: row.video.prompt,
             caption: row.video.caption,
-            startImageUrl: blob.url,
+            startImageUrl,
             startImageBytes: file.size,
           })
           if (saved.ok) mark(key, "done")

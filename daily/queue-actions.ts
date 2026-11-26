@@ -1,8 +1,7 @@
 "use server"
 
-import { del } from "@vercel/blob"
 
-import { signedReadUrl } from "./blob-server"
+import { deleteStoredFile, isBlobUrl as isStoredUrl, signedReadUrl } from "./blob-server"
 import { parseBlocks } from "./blocks"
 import { formatVariants } from "./caption-variants"
 import { discoverPages, listChannels, metaTokenStatus, saveExtraChannels } from "./channels"
@@ -24,6 +23,7 @@ import {
   setSetting,
 } from "./db"
 import type { QueueChannel, QueueItem } from "./db"
+import { usesVercelBlob } from "./blob"
 import { storageLimitBytes } from "./config"
 import { metaConfig } from "./meta"
 import {
@@ -56,13 +56,12 @@ async function guard<T>(run: () => Promise<T>): Promise<Result<T>> {
   }
 }
 
-function isBlobUrl(value: string): boolean {
-  try {
-    const url = new URL(value)
-    return url.protocol === "https:" && url.hostname.endsWith(".blob.vercel-storage.com")
-  } catch {
-    return false
-  }
+const isBlobUrl = isStoredUrl
+
+/** A not-yet-posted file still in Vercel Blob while this server keeps files
+    on its own disk (after moving off Vercel): it can no longer be read. */
+function isUnreachable(item: QueueItem): boolean {
+  return Boolean(item.mediaUrl && !item.mediaUrl.startsWith("local:") && item.status !== "published")
 }
 
 function asId(value: unknown): string {
@@ -79,6 +78,8 @@ export type QueueView = {
   pages: { list: DiscoveredPage[]; error: string | null; configured: boolean }
   /** Expiry of the Meta tokens, to renew them in time. */
   tokens: TokenStatus[]
+  /** Waiting files left in Vercel Blob that this server cannot read. */
+  unreachable: number
   items: QueueItem[]
   settings: QueueSettings
   lastTickAt: string | null
@@ -120,6 +121,7 @@ export async function getQueueView(channelInput: unknown): Promise<Result<QueueV
       channels,
       pages: { list: pages.pages, error: pages.error, configured: pages.configured },
       tokens,
+      unreachable: usesVercelBlob() ? 0 : items.filter((item) => isUnreachable(item)).length,
       items,
       settings,
       lastTickAt,
@@ -189,7 +191,7 @@ export async function removeQueueItem(id: unknown): Promise<Result<null>> {
   return guard(async () => {
     const removed = await deleteQueueItem(asId(id))
     if (removed?.mediaUrl && isBlobUrl(removed.mediaUrl) && (await otherMediaRefs(removed.mediaUrl, removed.id)) === 0)
-      await del(removed.mediaUrl).catch(() => undefined)
+      await deleteStoredFile(removed.mediaUrl).catch(() => undefined)
     if (removed) await rescheduleQueue(removed.channel)
     return null
   })
@@ -318,5 +320,22 @@ export async function queueMediaLink(id: unknown): Promise<Result<string>> {
     const item = await getQueueItem(asId(id))
     if (!item?.mediaUrl) throw new Error("ფაილი აღარ არის საცავში.")
     return signedReadUrl(item.mediaUrl, 1)
+  })
+}
+
+/** Removes, from every queue, waiting files that stayed behind in Vercel
+    Blob and cannot be read here; they need uploading again. */
+export async function removeUnreachableQueueItems(): Promise<Result<number>> {
+  return guard(async () => {
+    if (usesVercelBlob()) return 0
+    let removed = 0
+    for (const channel of await listChannels())
+      for (const item of await listQueue(channel.id))
+        if (isUnreachable(item)) {
+          await deleteQueueItem(item.id)
+          removed++
+        }
+    for (const channel of await listChannels()) await rescheduleQueue(channel.id)
+    return removed
   })
 }
