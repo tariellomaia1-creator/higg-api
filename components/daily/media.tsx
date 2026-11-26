@@ -73,7 +73,7 @@ export function ResultPreview({
             muted
             playsInline
             loop
-            preload="metadata"
+            preload="none"
             className="size-full object-cover"
             onMouseEnter={(event) => void event.currentTarget.play().catch(() => undefined)}
             onMouseLeave={(event) => event.currentTarget.pause()}
