@@ -2,6 +2,7 @@
 
 import { del } from "@vercel/blob"
 
+import { signedReadUrl } from "./blob-server"
 import { parseBlocks } from "./blocks"
 import { formatVariants } from "./caption-variants"
 import { discoverPages, listChannels, metaTokenStatus, saveExtraChannels } from "./channels"
@@ -306,5 +307,16 @@ export async function setQueueItemBadge(id: unknown, wanted: unknown): Promise<R
     if (item.branding === "done") throw new Error("ლოგო უკვე დადებულია; მოსახსნელად ვიდეო თავიდან ატვირთე.")
     await setQueueBrandingByUrl(item.mediaUrl, wanted === true ? null : "skip")
     return null
+  })
+}
+
+/** A short-lived direct link to a queued file, so the browser plays it
+    straight from storage when asked, not through this site's server (which
+    would count the file twice against the bandwidth limits). */
+export async function queueMediaLink(id: unknown): Promise<Result<string>> {
+  return guard(async () => {
+    const item = await getQueueItem(asId(id))
+    if (!item?.mediaUrl) throw new Error("ფაილი აღარ არის საცავში.")
+    return signedReadUrl(item.mediaUrl, 1)
   })
 }

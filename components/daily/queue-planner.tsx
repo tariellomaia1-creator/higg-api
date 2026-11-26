@@ -28,6 +28,7 @@ import {
   getQueueView,
   moveQueueItem,
   publishQueueItemNow,
+  queueMediaLink,
   redistributeQueueCaptions,
   refreshQueuePublishing,
   removeQueueItem,
@@ -45,7 +46,6 @@ import type { SlotKind } from "@/daily/queue-schedule"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
-import { mediaSrc } from "./media"
 
 const ACCEPTED = ["video/mp4", "video/quicktime", "image/jpeg", "image/png", "image/webp"]
 const MULTIPART_FROM = 40 * 1024 * 1024
@@ -835,6 +835,50 @@ function SettingsPanel({
   )
 }
 
+/** Loads a file only when asked, straight from storage: listing the queue
+    must not download every video (that used up the monthly bandwidth). */
+function QueuePreview({ item }: { item: QueueItem }) {
+  const [src, setSrc] = useState<string | null>(null)
+  const [state, setState] = useState<"idle" | "loading" | "error">("idle")
+  const Icon = item.kind === "video" ? Film : ImageIcon
+
+  async function open() {
+    setState("loading")
+    const result = await queueMediaLink(item.id)
+    if (result.ok) {
+      setSrc(result.data)
+      setState("idle")
+    } else setState("error")
+  }
+
+  return (
+    <div className="aspect-[9/16] w-24 overflow-hidden rounded-lg bg-muted">
+      {src ? (
+        item.kind === "video" ? (
+          <video src={src} controls autoPlay playsInline className="size-full object-cover" />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={src} alt="" className="size-full object-cover" />
+        )
+      ) : item.mediaUrl ? (
+        <button
+          type="button"
+          onClick={() => void open()}
+          disabled={state === "loading"}
+          className="flex size-full flex-col items-center justify-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+        >
+          {state === "loading" ? <Loader2 className="size-5 animate-spin" /> : <Icon className="size-5" />}
+          {state === "error" ? "ვერ ჩაიტვირთა" : "ნახვა"}
+        </button>
+      ) : (
+        <div className="flex size-full items-center justify-center text-muted-foreground">
+          <Icon className="size-5" />
+        </div>
+      )}
+    </div>
+  )
+}
+
 function QueueRow({
   item,
   index,
@@ -867,20 +911,7 @@ function QueueRow({
     <li className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-3 sm:flex-row">
       <div className="flex shrink-0 items-start gap-3">
         <span className="mt-1 w-6 text-right text-sm text-muted-foreground tabular-nums">{index + 1}</span>
-        <div className="aspect-[9/16] w-24 overflow-hidden rounded-lg bg-muted">
-          {item.mediaUrl ? (
-            item.kind === "video" ? (
-              <video src={mediaSrc(item.mediaUrl)} muted playsInline preload="metadata" className="size-full object-cover" />
-            ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={mediaSrc(item.mediaUrl)} alt="" className="size-full object-cover" />
-            )
-          ) : (
-            <div className="flex size-full items-center justify-center text-muted-foreground">
-              {item.kind === "video" ? <Film className="size-5" /> : <ImageIcon className="size-5" />}
-            </div>
-          )}
-        </div>
+        <QueuePreview item={item} />
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col gap-2">
