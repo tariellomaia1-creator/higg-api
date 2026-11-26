@@ -1,5 +1,3 @@
-import type { NextConfig } from "next"
-
 import { syncModels, watchModels } from "./scripts/sync-models.mjs"
 
 // Keep the model barrel + registry items in sync with generation/catalog/models/*.
@@ -13,7 +11,10 @@ const BRANDING_FILES = [
   "./daily/assets/watermark.png",
 ]
 
-const nextConfig: NextConfig = {
+/** Plain JavaScript (not next.config.ts): hosts with an older glibc, such
+    as Hostinger, cannot load the native SWC that compiles a TS config.
+    @type {import("next").NextConfig} */
+const nextConfig = {
   agentRules: false,
   outputFileTracingIncludes: {
     "/api/cron/tick": BRANDING_FILES,
